@@ -289,7 +289,7 @@ def load_method_switching_crosstab(): return _load_pp_or_none("17cqQzQKlD5MTWYXP
 # fpatt_* attitude items are covered — see 3_linkage/config.py
 # ATTITUDE_CROSSWALK for which, and why the other 4 have no usable baseline
 # equivalent.
-def load_attitudes_change():         return _load_pp_or_none("PASTE_FILE_ID_attitudes_change")
+def load_attitudes_change():         return _load_pp_or_none("11BI2JRJFfDyBOJD-lTH-3mGvsqyyZ0L2")
 
 # Same deal for compare_barriers.py's output (2026-09-10). Generate it with:
 #   cd 3_linkage && python compare_barriers.py
@@ -297,7 +297,7 @@ def load_attitudes_change():         return _load_pp_or_none("PASTE_FILE_ID_atti
 # file ID in place of the placeholder below. NOTE: restricted to the ~68
 # linked respondents who answered "why not using FP" on BOTH waves — small,
 # treat as directional only.
-def load_barriers_change():          return _load_pp_or_none("PASTE_FILE_ID_barriers_change")
+def load_barriers_change():          return _load_pp_or_none("1F_iIIA978BLWHFKvwTMWk8IcZXl3QMHi")
 
 
 # ── Cross-sectional (full baseline vs. full achieved sample) comparison ────────
@@ -309,13 +309,13 @@ def load_barriers_change():          return _load_pp_or_none("PASTE_FILE_ID_barr
 #   cd 3_linkage/cross_sectional && python compare_<metric>_unlinked.py
 # then upload the named CSV to Drive and paste its file ID in place of the
 # PASTE_FILE_ID_<name> placeholder.
-def load_knowledge_change_unlinked():        return _load_pp_or_none("PASTE_FILE_ID_knowledge_unlinked")
-def load_fp_use_change_unlinked():           return _load_pp_or_none("PASTE_FILE_ID_fp_use_unlinked")
-def load_method_switching_unlinked():        return _load_pp_or_none("PASTE_FILE_ID_method_switching_unlinked")
-def load_method_switching_crosstab_unlinked(): return _load_pp_or_none("PASTE_FILE_ID_method_switching_crosstab_unlinked")
-def load_unmet_need_change_unlinked():       return _load_pp_or_none("PASTE_FILE_ID_unmet_need_unlinked")
-def load_attitudes_change_unlinked():        return _load_pp_or_none("PASTE_FILE_ID_attitudes_unlinked")
-def load_barriers_change_unlinked():         return _load_pp_or_none("PASTE_FILE_ID_barriers_unlinked")
+def load_knowledge_change_unlinked():        return _load_pp_or_none("131YUi3VVs-knfnudjTZpIO7Dhv0bRokR")
+def load_fp_use_change_unlinked():           return _load_pp_or_none("1bVEc6WFrTSeKsoKe5g7yOf7kv_BijxX0")
+def load_method_switching_unlinked():        return _load_pp_or_none("1dAUkiG9fDpJHtE2gJOpPv3V3nw28E_TG")
+def load_method_switching_crosstab_unlinked(): return _load_pp_or_none("1wWGzyQmQgnc_Bgy7vPdIT-jzvvFa1wLx")
+def load_unmet_need_change_unlinked():       return _load_pp_or_none("1WyAyv6MJp7AOTs_vB8yHyITOcPwIraOd")
+def load_attitudes_change_unlinked():        return _load_pp_or_none("1AfdkuUEMtdLg6GwxclOmZck5K5Tr5epn")
+def load_barriers_change_unlinked():         return _load_pp_or_none("1Sf35OsddN5KNMV4nZ41Cvi2nCJwmJNKY")
 
 
 # ── Personas page ─────────────────────────────────────────────────────────────
