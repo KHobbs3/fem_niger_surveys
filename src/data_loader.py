@@ -282,6 +282,41 @@ def load_unmet_need_change():        return _load_pp_or_none("1kdJMRPY33t4JCLKb9
 def load_method_switching():         return _load_pp_or_none("1Cb8UuxaA2bwAESTpPIOlCrWyyf5uJuqc")
 def load_method_switching_crosstab(): return _load_pp_or_none("17cqQzQKlD5MTWYXPTuu6Tg9EZa9eXRrc")
 
+# Same deal for compare_attitudes.py's output (2026-09-10). Generate it with:
+#   cd 3_linkage && python compare_attitudes.py
+# then upload outputs/attitudes_change_summary.csv to Drive and paste its
+# file ID in place of the placeholder below. NOTE: only 4 of Phone Pulse's 8
+# fpatt_* attitude items are covered — see 3_linkage/config.py
+# ATTITUDE_CROSSWALK for which, and why the other 4 have no usable baseline
+# equivalent.
+def load_attitudes_change():         return _load_pp_or_none("PASTE_FILE_ID_attitudes_change")
+
+# Same deal for compare_barriers.py's output (2026-09-10). Generate it with:
+#   cd 3_linkage && python compare_barriers.py
+# then upload outputs/barriers_change_summary.csv to Drive and paste its
+# file ID in place of the placeholder below. NOTE: restricted to the ~68
+# linked respondents who answered "why not using FP" on BOTH waves — small,
+# treat as directional only.
+def load_barriers_change():          return _load_pp_or_none("PASTE_FILE_ID_barriers_change")
+
+
+# ── Cross-sectional (full baseline vs. full achieved sample) comparison ────────
+# Independent-samples counterpart to the "Knowledge change" loaders above —
+# same six metrics, but comparing ALL 968 formative respondents against
+# EACH round's full achieved Phone Pulse sample (not just the 471 linked),
+# using two-proportion z-test / chi-square instead of McNemar/Wilcoxon. See
+# 3_linkage/cross_sectional/README.md. Generate every file below with:
+#   cd 3_linkage/cross_sectional && python compare_<metric>_unlinked.py
+# then upload the named CSV to Drive and paste its file ID in place of the
+# PASTE_FILE_ID_<name> placeholder.
+def load_knowledge_change_unlinked():        return _load_pp_or_none("PASTE_FILE_ID_knowledge_unlinked")
+def load_fp_use_change_unlinked():           return _load_pp_or_none("PASTE_FILE_ID_fp_use_unlinked")
+def load_method_switching_unlinked():        return _load_pp_or_none("PASTE_FILE_ID_method_switching_unlinked")
+def load_method_switching_crosstab_unlinked(): return _load_pp_or_none("PASTE_FILE_ID_method_switching_crosstab_unlinked")
+def load_unmet_need_change_unlinked():       return _load_pp_or_none("PASTE_FILE_ID_unmet_need_unlinked")
+def load_attitudes_change_unlinked():        return _load_pp_or_none("PASTE_FILE_ID_attitudes_unlinked")
+def load_barriers_change_unlinked():         return _load_pp_or_none("PASTE_FILE_ID_barriers_unlinked")
+
 
 # ── Personas page ─────────────────────────────────────────────────────────────
 # Drive-hosted, like every other page — this app deploys to Streamlit

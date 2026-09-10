@@ -21,7 +21,7 @@ from src.page_pp_media import render as render_pp_media
 from src.page_pp_access import render as render_pp_access
 from src.page_pp_social_pressure import render as render_pp_social_pressure
 from src.page_pp_exposure import render as render_pp_exposure
-from src.page_knowledge_change import render as render_pp_knowledge_change
+from src.page_pp_change_over_time import render as render_pp_change_over_time
 
 # from src.page_stubs import (
     # render_personas,
@@ -163,9 +163,9 @@ elif survey == "Phone Pulse":
     pp_selected = option_menu(
         menu_title=None,
         options=[
+            "Change Over Time",
             "Respondents",
             "Campaign Exposure",
-            "Baseline vs Follow-up",
             "Family Planning",
             "Attitudes",
             "Radio",
@@ -175,9 +175,9 @@ elif survey == "Phone Pulse":
             "Social Pressure",
         ],
         icons=[
+            "arrow-left-right",
             "bar-chart-fill",
             "broadcast",
-            "arrow-left-right",
             "house-heart-fill",
             "chat-quote-fill",
             "speaker-fill",
@@ -200,12 +200,12 @@ elif survey == "Phone Pulse":
 
     st.markdown("")
 
-    if pp_selected == "Respondents":
+    if pp_selected == "Change Over Time":
+        render_pp_change_over_time()
+    elif pp_selected == "Respondents":
         render_pp_respondents()
     elif pp_selected == "Campaign Exposure":
         render_pp_exposure()
-    elif pp_selected == "Baseline vs Follow-up":
-        render_pp_knowledge_change()
     elif pp_selected == "Family Planning":
         render_pp_family_planning()
     elif pp_selected == "Attitudes":
