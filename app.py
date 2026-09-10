@@ -84,8 +84,8 @@ st.caption(
 # ── Top-level survey switcher ─────────────────────────────────────────────────
 survey = option_menu(
     menu_title=None,
-    options=["Formative Research", "Phone Pulse"],
-    icons=["journal-text", "telephone-fill"],
+    options=["Change Over Time", "Formative Research", "Phone Pulse"],
+    icons=["arrow-left-right", "journal-text", "telephone-fill"],
     menu_icon="cast",
     default_index=0,
     orientation="horizontal",
@@ -101,9 +101,17 @@ survey = option_menu(
 st.markdown("")  # breathing room
 
 # ══════════════════════════════════════════════════════════════════════════════
+# CHANGE OVER TIME (landing page — baseline vs. every follow-up round, both
+# comparison types. Not nested under Formative Research or Phone Pulse: it
+# spans both, so it gets its own top-level slot and loads first.)
+# ══════════════════════════════════════════════════════════════════════════════
+if survey == "Change Over Time":
+    render_pp_change_over_time()
+
+# ══════════════════════════════════════════════════════════════════════════════
 # FORMATIVE RESEARCH
 # ══════════════════════════════════════════════════════════════════════════════
-if survey == "Formative Research":
+elif survey == "Formative Research":
     selected = option_menu(
         menu_title=None,
         options=[
@@ -163,7 +171,6 @@ elif survey == "Phone Pulse":
     pp_selected = option_menu(
         menu_title=None,
         options=[
-            "Change Over Time",
             "Respondents",
             "Campaign Exposure",
             "Family Planning",
@@ -175,7 +182,6 @@ elif survey == "Phone Pulse":
             "Social Pressure",
         ],
         icons=[
-            "arrow-left-right",
             "bar-chart-fill",
             "broadcast",
             "house-heart-fill",
@@ -200,9 +206,7 @@ elif survey == "Phone Pulse":
 
     st.markdown("")
 
-    if pp_selected == "Change Over Time":
-        render_pp_change_over_time()
-    elif pp_selected == "Respondents":
+    if pp_selected == "Respondents":
         render_pp_respondents()
     elif pp_selected == "Campaign Exposure":
         render_pp_exposure()
