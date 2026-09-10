@@ -63,6 +63,23 @@ def _round_x_label(r: dict) -> str:
     return r["label"] if r["status"] == "live" else f"{r['label']} — pending"
 
 
+# ── Compare-as mode (mirrors Benin's page_baseline_followup.py toggle) ───────
+MODE_DESCRIPTIONS = {
+    "Cross-sectional": (
+        "Each wave's own respondents (the full formative baseline, then "
+        "each Phone Pulse round's full achieved sample) compared as "
+        "independent population-level snapshots — shows how the "
+        "population overall is moving, not whether any individual changed."
+    ),
+    "Longitudinal": (
+        "Only respondents present in every wave (the 471-person linked "
+        "panel, out of 968 baseline / 509 Phone Pulse round 1 "
+        "respondents), tracked across time — shows whether the SAME "
+        "people's answers changed, not just the population mix."
+    ),
+}
+
+
 def _ensure_round_column(df: pd.DataFrame) -> pd.DataFrame:
     """Defensive fallback: the Drive-hosted CSVs for the 4 metrics that
     existed before this page's rebuild may still be the pre-round-column
@@ -610,33 +627,31 @@ def _render_comparison_type(is_linked: bool) -> None:
 
 
 def render() -> None:
-    st.markdown("### Phone Pulse — Change Over Time")
+    st.header("Baseline vs. Follow-up")
     st.caption(
-        "The home page for baseline-vs-follow-up: every metric below is "
-        "shown as a time series from the Formative Research baseline "
-        "through each Phone Pulse follow-up round."
+        "Time series across the full survey program — baseline plus Phone "
+        "Pulse follow-ups at 3, 6, and 24 months — for awareness of "
+        "methods, attitudes, and family planning barriers."
     )
 
-    with st.expander("How this comparison works", expanded=True):
+    mode = st.radio(
+        "Compare as:",
+        list(MODE_DESCRIPTIONS.keys()),
+        horizontal=True,
+        help="Cross-sectional = independent samples per wave. Longitudinal = same panel, tracked over time.",
+    )
+    is_linked = mode == "Longitudinal"
+    st.caption(MODE_DESCRIPTIONS[mode])
+
+    st.markdown(
+        "**Waves:** " + " → ".join(["Baseline"] + [_round_x_label(r) for r in ROUNDS])
+        + ("  *(471-person linked panel only)*" if is_linked else "  *(each wave's own respondents)*")
+    )
+
+    st.divider()
+
+    with st.expander("How this comparison works"):
         st.markdown(
-            "**Two different ways to compare baseline to follow-up — read "
-            "this before the charts below:**\n\n"
-            "- **Cross-sectional** (first tab): compares the FULL "
-            "formative baseline (968 respondents) against EACH round's "
-            "FULL achieved Phone Pulse sample (509 for round 1) as **two "
-            "independent samples — not the same people**. Uses "
-            "independent-samples tests (two-proportion z-test, "
-            "Mann-Whitney, chi-square). Covers everyone in each wave, at "
-            "the cost of not controlling for who happens to be in each "
-            "sample.\n"
-            "- **Longitudinal** (second tab): pairs the SAME 471 people¹ "
-            "across both waves — the respondents successfully linked via "
-            "a roster crosswalk out of 968 baseline / 509 follow-up "
-            "respondents. Uses paired tests (McNemar's exact test, "
-            "Wilcoxon signed-rank), which can ask \"did *this group's* "
-            "answers change\" — a question the cross-sectional comparison "
-            "can't answer — but only covers the subset that could be "
-            "re-contacted and matched.\n"
             "- **Rounds**: today only Round 1 (~3 months post-campaign) "
             "has real data. Round 2 (~6 mo) and Round 3 (~24 mo) are "
             "shown on every chart as upcoming, clearly-labeled gaps — "
@@ -652,10 +667,4 @@ def render() -> None:
             "phone pulse, 471 linked (92.5% of phone pulse respondents).",
         ])
 
-    top_cross, top_longitudinal = st.tabs([
-        "Cross-sectional (independent samples)", "Longitudinal (linked panel)",
-    ])
-    with top_cross:
-        _render_comparison_type(is_linked=False)
-    with top_longitudinal:
-        _render_comparison_type(is_linked=True)
+    _render_comparison_type(is_linked)
