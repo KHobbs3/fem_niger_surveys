@@ -69,6 +69,26 @@ st.markdown(f"""
 </style>
 """, unsafe_allow_html=True)
 
+# ── Niger flag banner ─────────────────────────────────────────────────────────
+# Full-width strip in the flag's pattern: orange / white / green horizontal
+# thirds with the orange disc centred on the white band. Matches the Togo
+# app's banner so the country versions are distinguishable at a glance.
+NIGER_ORANGE = "#E05206"
+NIGER_WHITE  = "#FFFFFF"
+NIGER_GREEN  = "#0DB02B"
+FLAG_STRIPE_PX = 15
+
+_disc = round(FLAG_STRIPE_PX * 0.8)
+st.markdown(f"""
+<div style="position:relative;height:{FLAG_STRIPE_PX * 3}px;margin:0 0 0.6rem;border-radius:4px;
+            overflow:hidden;background:linear-gradient(to bottom,
+            {NIGER_ORANGE} 0% 33.34%, {NIGER_WHITE} 33.34% 66.67%, {NIGER_GREEN} 66.67% 100%);"
+     role="img" aria-label="Flag of Niger">
+    <div style="position:absolute;top:50%;left:50%;width:{_disc}px;height:{_disc}px;
+                transform:translate(-50%,-50%);border-radius:50%;background:{NIGER_ORANGE};"></div>
+</div>
+""", unsafe_allow_html=True)
+
 # ── Title ─────────────────────────────────────────────────────────────────────
 st.markdown(
     f"<h2 style='margin-bottom:0.2rem;color:{FEM_BROWN};'>FEM Survey Analysis - Niger (2025)</h2>",

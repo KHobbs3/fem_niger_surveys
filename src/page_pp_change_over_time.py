@@ -116,6 +116,19 @@ def _render_questions_asked(baseline_q: str, followup_q: str, sources: list[str]
         _footnotes(sources)
 
 
+def _detail_table(table: pd.DataFrame) -> None:
+    """Round-1 detail table with percentages to one decimal place."""
+    st.dataframe(
+        table, use_container_width=True, hide_index=True,
+        column_config={
+            **{c: st.column_config.NumberColumn(c, format="%.1f")
+               for c in ("Baseline %", "Round 1 %") if c in table.columns},
+            **({"p-value": st.column_config.NumberColumn("p-value", format="%.4f")}
+               if "p-value" in table.columns else {}),
+        },
+    )
+
+
 def _sig_note(p_value, direction: str, test_name: str) -> str:
     if pd.isna(p_value):
         return ""
@@ -152,7 +165,7 @@ def _single_metric_timeseries(df: pd.DataFrame, baseline_col: str, value_col: st
         x=x_labels, y=y_vals, mode="lines+markers+text",
         text=texts, textposition="top center",
         line=dict(color=FEM_NAVY, width=2), marker=dict(size=11, color=FEM_NAVY),
-        connectgaps=False,
+        connectgaps=False, hovertemplate="%{x}: %{y:.1f}%<extra></extra>",
     ))
     fig.update_layout(
         **_CHART, title=title, yaxis_title=y_title,
@@ -187,7 +200,7 @@ def _multi_item_timeseries(df: pd.DataFrame, item_col: str, baseline_col: str,
         fig.add_trace(go.Scatter(
             x=x_labels, y=y_vals, mode="lines+markers", name=str(item)[:40],
             line=dict(color=PALETTE[i % len(PALETTE)]), marker=dict(size=8),
-            connectgaps=False,
+            connectgaps=False, hovertemplate="%{x}: %{y:.1f}%",
         ))
     fig.update_layout(
         **_CHART, title=title, yaxis_title=y_title,
@@ -260,10 +273,10 @@ def _render_knowledge(is_linked: bool) -> None:
         if not row1.empty:
             row = row1.iloc[0]
             col1, col2 = st.columns(2)
-            col1.metric("Known at baseline", f"{row['known_baseline_pct']:.0f}%")
+            col1.metric("Known at baseline", f"{row['known_baseline_pct']:.1f}%")
             col2.metric(
-                "Known — Round 1", f"{row['known_pulse_pct']:.0f}%",
-                delta=f"{row['known_pulse_pct'] - row['known_baseline_pct']:+.0f} pts",
+                "Known — Round 1", f"{row['known_pulse_pct']:.1f}%",
+                delta=f"{row['known_pulse_pct'] - row['known_baseline_pct']:+.1f} pts",
             )
 
     methods = df[df["method"] != "__OVERALL__"]
@@ -287,12 +300,11 @@ def _render_knowledge(is_linked: bool) -> None:
     show_cols = ["method", "known_baseline_pct", "known_pulse_pct", p_col, "direction"]
     show_cols = [c for c in show_cols if c in r1.columns]
     if not r1.empty:
-        st.dataframe(
+        _detail_table(
             r1[show_cols].rename(columns={
                 "method": "Method", "known_baseline_pct": "Baseline %",
                 "known_pulse_pct": "Round 1 %", p_col: "p-value", "direction": "Direction",
             }).sort_values("p-value").reset_index(drop=True),
-            use_container_width=True, hide_index=True,
         )
 
 
@@ -418,10 +430,10 @@ def _render_method_switching(is_linked: bool) -> None:
             fig = go.Figure()
             fig.add_trace(go.Bar(x=r1["baseline_pct"], y=r1["category"], orientation="h",
                                   name="Baseline", marker_color=FEM_TAUPE,
-                                  text=r1["baseline_pct"].map(lambda v: f"{v:.0f}%"), textposition="outside"))
+                                  text=r1["baseline_pct"].map(lambda v: f"{v:.1f}%"), textposition="outside"))
             fig.add_trace(go.Bar(x=r1["pulse_pct"], y=r1["category"], orientation="h",
                                   name="Round 1", marker_color=FEM_NAVY,
-                                  text=r1["pulse_pct"].map(lambda v: f"{v:.0f}%"), textposition="outside"))
+                                  text=r1["pulse_pct"].map(lambda v: f"{v:.1f}%"), textposition="outside"))
             fig.update_layout(**_CHART, title="Current-method mix: baseline vs. Round 1",
                                barmode="group", xaxis_title="% of full sample",
                                xaxis_range=[0, 115], height=320,
@@ -514,12 +526,11 @@ def _render_attitudes(is_linked: bool) -> None:
     show_cols = [c for c in show_cols if c in r1.columns]
     if not r1.empty:
         st.markdown("#### Detail — Round 1")
-        st.dataframe(
+        _detail_table(
             r1[show_cols].rename(columns={
                 "item": "Item", "holds_view_baseline_pct": "Baseline %",
                 "holds_view_pulse_pct": "Round 1 %", p_col: "p-value", "direction": "Direction",
             }).reset_index(drop=True),
-            use_container_width=True, hide_index=True,
         )
 
 
@@ -567,12 +578,11 @@ def _render_barriers(is_linked: bool) -> None:
     show_cols = [c for c in show_cols if c in r1.columns]
     if not r1.empty:
         st.markdown("#### Detail — Round 1")
-        st.dataframe(
+        _detail_table(
             r1[show_cols].rename(columns={
                 "category": "Reason", "cited_baseline_pct": "Baseline %",
                 "cited_pulse_pct": "Round 1 %", p_col: "p-value", "direction": "Direction",
             }).sort_values("Baseline %", ascending=False).reset_index(drop=True),
-            use_container_width=True, hide_index=True,
         )
 
 

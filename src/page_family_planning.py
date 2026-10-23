@@ -23,6 +23,7 @@ from src.data_loader import (
     load_fp_intent,
     load_fp_nonuse_reasons,
     load_fp_unmet,
+    load_fp_headline,
 )
 
 FEM_PALETTE = [FEM_ORANGE, FEM_BROWN, FEM_TAUPE, FEM_STEEL, FEM_NAVY]
@@ -349,6 +350,80 @@ def render_funnel(df_funnel, split_col):
         )
 
 
+# ── Headline indicators ───────────────────────────────────────────────────────
+
+HEADLINE_POPULATIONS = {
+    "full_sample": "Full sample",
+    "women":       "All women",
+}
+
+HEADLINE_METRICS = {
+    "mcpr":                  "mCPR",
+    "unmet_need_spacing":    "Unmet need for spacing",
+    "unmet_demand":          "Unmet demand",
+    "demand_satisfied":      "Demand satisfied (modern methods)",
+    "aware_modern":          "Awareness of methods (all)",
+    "aware_modern_nonusers": "Awareness of methods (non-users)",
+}
+
+
+def render_headline(df_headline):
+    st.subheader("Key indicators")
+    if df_headline is None or df_headline.empty:
+        st.warning(
+            "Headline indicators not found. Run `python pipeline/run_pipeline.py "
+            "--pages family_planning`, upload `fp_headline.csv` to Drive and paste "
+            "its file ID into `data_loader.py`."
+        )
+        return
+
+    table = (
+        df_headline.pivot(index="metric", columns="population", values="value")
+        .reindex(index=list(HEADLINE_METRICS), columns=list(HEADLINE_POPULATIONS))
+        .rename(index=HEADLINE_METRICS, columns=HEADLINE_POPULATIONS)
+        .mul(100)
+        .rename_axis("Indicator")
+        .reset_index()
+    )
+    st.dataframe(
+        table,
+        use_container_width=True,
+        hide_index=True,
+        column_config={
+            label: st.column_config.NumberColumn(label, format="%.1f%%")
+            for label in HEADLINE_POPULATIONS.values()
+        },
+    )
+
+    n = df_headline.pivot(index="metric", columns="population", values="n_unweighted")
+    n_note = " · ".join(
+        f"{label}: N = {int(n.loc['mcpr', pop])} "
+        f"({int(n.loc['aware_modern_nonusers', pop])} non-users)"
+        for pop, label in HEADLINE_POPULATIONS.items() if pop in n.columns
+    )
+    with st.expander("How each indicator is calculated"):
+        st.markdown(
+            "All figures are weighted (`combined_weight_adjusted`) shares of every "
+            "respondent in the population, unless noted.\n\n"
+            "- **mCPR** — currently using a modern/effective method "
+            "(`current_use_methods`; same definition as the funnel's \"Using an "
+            "effective method\" stage).\n"
+            "- **Unmet need for spacing** — wants to wait 1+ years before the next "
+            "pregnancy (`time_before_preferred_pregnancy` = 1–2 years or more than 2 "
+            "years) but not currently using any method. Excludes those who want no "
+            "more children (limiting).\n"
+            "- **Unmet demand** — unmet need (spacing or limiting) AND says they "
+            "intend to use contraception in future (`future_intent`).\n"
+            "- **Demand satisfied** — mCPR ÷ (total CPR [any method] + unmet need "
+            "[spacing or limiting]), the official DHS formula.\n"
+            "- **Awareness of methods (all)** — named at least one modern method "
+            "(`known_contraceptive_options`).\n"
+            "- **Awareness of methods (non-users)** — same, among respondents not "
+            "currently using any method (`current_use` ≠ Yes).\n\n"
+            f"Unweighted N — {n_note}"
+        )
+
+
 # ── Section renderers ─────────────────────────────────────────────────────────
 
 def render_unmet(df_unmet, df_funnel, split_col):
@@ -503,23 +578,10 @@ def render():
     df_intent  = load_fp_intent()
     df_nonuse  = load_fp_nonuse_reasons()
     df_unmet   = load_fp_unmet()
+    df_headline = load_fp_headline()
 
-    mcpr = _mcpr_value(df_funnel)
-    if mcpr is not None:
-        st.metric(
-            "Baseline modern contraceptive prevalence rate (mCPR)",
-            f"{mcpr * 100:.1f}%",
-            help=(
-                "Two questions combined: (1) currently using anything to avoid "
-                "pregnancy, and (2) which method — restricted to modern/"
-                "effective methods (sterilisation, implants, pills, IUD, "
-                "injectables, condoms, ring, patch, vaginal barrier methods, "
-                "emergency pills). Excludes withdrawal, abstinence, calendar/"
-                "standard-days methods, and LAM."
-            ),
-        )
-    else:
-        st.warning(_MISSING)
+    render_headline(df_headline)
+    st.divider()
 
     split_by  = st.radio("Split all charts by", list(SPLIT_MAP.keys()), horizontal=True)
     split_col = SPLIT_MAP[split_by]
