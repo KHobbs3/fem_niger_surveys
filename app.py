@@ -110,7 +110,7 @@ survey = option_menu(
     default_index=0,
     orientation="horizontal",
     styles={
-        "container": {"background-color": FEM_BROWN, "padding": "0 4px", "margin": "0 0 4px 0"},
+        "container": {"max-width": "100%", "background-color": FEM_BROWN, "padding": "0 4px", "margin": "0 0 4px 0"},
         "icon":      {"color": "#f5e6d8", "font-size": "15px"},
         "nav-link":  {"color": "#f5e6d8", "padding": "5px 18px", "--hover-color": FEM_ORANGE,
                       "font-size": "14px", "font-weight": "600"},
@@ -158,7 +158,7 @@ elif survey == "Formative Research":
         default_index=1,
         orientation="horizontal",
         styles={
-            "container": {"background-color": FEM_TAUPE, "padding": "0", "margin": "0"},
+            "container": {"max-width": "100%", "background-color": FEM_TAUPE, "padding": "0", "margin": "0"},
             "icon":      {"color": FEM_ORANGE, "font-size": "14px"},
             "nav-link":  {"padding": "4px 10px", "--hover-color": FEM_STEEL},
             "nav-link-selected": {"background-color": FEM_NAVY},
@@ -216,7 +216,7 @@ elif survey == "Phone Pulse":
         default_index=0,
         orientation="horizontal",
         styles={
-            "container": {"background-color": FEM_STEEL, "padding": "0", "margin": "0"},
+            "container": {"max-width": "100%", "background-color": FEM_STEEL, "padding": "0", "margin": "0"},
             "icon":      {"color": "#dce8f0", "font-size": "14px"},
             "nav-link":  {"color": "#dce8f0", "padding": "4px 10px",
                           "--hover-color": FEM_TAUPE},
