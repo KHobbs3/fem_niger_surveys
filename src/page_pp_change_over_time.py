@@ -276,12 +276,31 @@ def _render_key_indicators(is_linked: bool) -> None:
             return r["followup_value"], r["followup_ci_low"], r["followup_ci_high"]
         return f
 
+    def change_lookup(pop, rnd):
+        def f(metric):
+            r = sub[(sub["population"] == pop) & (sub["metric"] == metric)
+                    & (sub["round"] == rnd["round_id"])]
+            if r.empty or "change_pp" not in r.columns or pd.isna(r.iloc[0]["change_pp"]):
+                return "—"
+            r = r.iloc[0]
+            return ki.change_cell(r["change_pp"], r["change_ci_low_pp"], r["change_ci_high_pp"],
+                                  r["change_p_value"])
+        return f
+
+    live = [r for r in ROUNDS if r["status"] == "live"]
     for pop, pop_label in ki.HEADLINE_POPULATIONS.items():
         st.markdown(f"**{pop_label}** — estimate (95% CI)")
         waves = [("Baseline", baseline_lookup(pop))] + [
             (_round_x_label(r), round_lookup(pop, r)) for r in ROUNDS
-        ]
+        ] + [(f"Change vs baseline — {r['label']}", change_lookup(pop, r)) for r in live]
         ki.show(ki.change_table(pop, waves))
+    st.caption(
+        "Change = follow-up minus baseline, in percentage points (pp), with its 95% CI "
+        "and p-value. p < 0.05 means the change is unlikely to be chance alone; a larger "
+        "p means the survey can't tell the change apart from no change — not that "
+        "nothing changed. Awareness rises are partly due to the question being read "
+        "aloud at follow-up but not at baseline."
+    )
 
     with st.expander("How the follow-up is weighted"):
         st.markdown(

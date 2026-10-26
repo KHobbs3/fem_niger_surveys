@@ -70,12 +70,20 @@ def headline_table(df, status=None, metrics=HEADLINE_METRICS):
 
 
 def wave_cell(got):
-    if got in (NOT_ASKED, PENDING):
+    if isinstance(got, str):          # NOT_ASKED, PENDING or pre-formatted text
         return got
     if not got:
         return "—"
     v, lo, hi = got
     return f"{pct(v)} ({ci(lo, hi)})" if pd.notna(lo) else pct(v)
+
+
+def change_cell(pp, lo, hi, p, n_boot=1000):
+    """'+8.7 pp (−1.6 to +19.6), p = 0.10' for a change in percentage points."""
+    if pd.isna(pp):
+        return "—"
+    ptxt = f"p < {2 / n_boot:.3f}" if p <= 2 / n_boot else f"p = {p:.2f}" if p >= 0.01 else f"p = {p:.3f}"
+    return f"{pp:+.1f} pp ({lo:+.1f} to {hi:+.1f}), {ptxt}".replace("-", "−")
 
 
 def change_table(population, waves, metrics=HEADLINE_METRICS):
