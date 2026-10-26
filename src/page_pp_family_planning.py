@@ -10,7 +10,9 @@ from src.data_loader import (
     load_pp_fp_whynot,
     load_pp_fp_preg_chance,
     load_pp_respondents_profile,
+    load_pp_headline,
 )
+from src import key_indicators as ki
 
 FEM_ORANGE = "#C1693A"
 FEM_BROWN  = "#8B5E45"
@@ -108,9 +110,50 @@ def _render_unmet_need() -> None:
     st.markdown("---")
 
 
+def _render_key_indicators() -> None:
+    st.markdown("#### Key indicators")
+    df = load_pp_headline()
+    if df is None or df.empty:
+        st.info(
+            "Key indicators pending: run 3_linkage/attrition_weights.py then "
+            "compare_key_indicators.py, upload `pp_headline.csv` to Drive and paste its "
+            "file ID into `data_loader.py`."
+        )
+        return
+    ki.show(ki.headline_table(df, status="status", metrics=ki.PULSE_METRICS))
+    with st.expander("About these figures"):
+        st.markdown(
+            "- **Who:** FEM-station listeners (Treatment arm) who could be linked to "
+            "their baseline interview. Weighted with attrition-adjusted baseline "
+            "weights, so the figures represent the baseline population (see the "
+            "weighting note on the Change Over Time page).\n"
+            "- **mCPR:** currently doing something to avoid pregnancy (`fpbeh_fpnow`) "
+            "and using a modern method (`fpbeh_which`). Same method list as the "
+            "baseline, so Standard Days and LAM are *not* counted as modern here, "
+            "unlike the method charts below.\n"
+            "- **Awareness:** named at least one modern method (`fpbeh_awarefp`). The "
+            "enumerator read the methods aloud, so awareness is higher than at "
+            "baseline, where only unprompted answers counted.\n"
+            "- **Campaign content recall:** said they heard radio programmes or ads on "
+            "maternal and child health, fertility or birth spacing in the last month "
+            "(`uptake_fp`) AND gave the campaign's key message when asked how long to wait "
+            "after a birth before the next pregnancy — \"at least two years\" "
+            "(`knowledge_waiting`). Share of everyone in the column; people who didn't hear "
+            "a programme count as no. Phone Pulse has no open \"what do you remember?\" "
+            "question, and people may know the 2-year message from other sources.\n"
+            "- **Not asked:** Phone Pulse never asked *when* respondents want their next "
+            "child, or whether they'd use contraception in future, so unmet need, unmet "
+            "demand and demand satisfied can't be calculated.\n"
+            "- **95% CIs:** settlement-level bootstrap on the baseline design; they "
+            "treat the attrition weights as fixed, so they are slightly too narrow."
+        )
+    st.markdown("---")
+
+
 def render() -> None:
     st.markdown("### Phone Pulse — Family Planning Behaviour")
 
+    _render_key_indicators()
     _render_unmet_need()
 
     view = st.radio("View by", list(SPLIT_OPTIONS.keys()), horizontal=True, key="pp_fp_split")

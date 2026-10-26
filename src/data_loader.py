@@ -197,6 +197,15 @@ def _load_pp_or_none(file_id: str, **kwargs) -> pd.DataFrame | None:
     except Exception:
         return None
 
+# Key FP indicators (mCPR, awareness; unmet need etc. marked "not_asked"),
+# weighted with attrition-adjusted baseline weights. Both written by
+# 3_linkage/compare_key_indicators.py (run 3_linkage/attrition_weights.py
+# first) to 3_linkage/outputs/ -- upload each to Drive and paste its file ID.
+#   pp_headline.csv            -> Phone Pulse Family Planning page (Treatment arm)
+#   key_indicators_change.csv  -> Change Over Time "Key Indicators" tab
+def load_pp_headline():              return _load_pp_or_none("1un1IV3jX2W61HpuohAoHLVSkvWIFaWW5")
+def load_key_indicators_change():    return _load_pp_or_none("1ru7e4AhISk1P5BNJHYN4FbiwZW2Sln4W")
+
 def load_pp_respondents_profile():   return _load_pp("1TVHSn3BwIUvHqT4jwABQ73G35N9qmv0J")
 def load_pp_village_stations():      return _load_pp_or_none("1KPlAzbyLNcKE308VwGhwqKcrGze9TZHS")
 def load_pp_fp_awareness():          return _load_pp("16ypwYJhHa7FC8d9MRzeticWl1t54N-BK")

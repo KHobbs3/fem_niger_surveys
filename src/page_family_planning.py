@@ -15,6 +15,7 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 from src.fem_colours import FEM_ORANGE, FEM_BROWN, FEM_TAUPE, FEM_STEEL, FEM_NAVY
+from src import key_indicators as ki
 from src.data_loader import (
     load_fp_funnel,
     load_fp_timing,
@@ -352,21 +353,6 @@ def render_funnel(df_funnel, split_col):
 
 # ── Headline indicators ───────────────────────────────────────────────────────
 
-HEADLINE_POPULATIONS = {
-    "full_sample": "Full sample",
-    "women":       "All women",
-}
-
-HEADLINE_METRICS = {
-    "mcpr":                  "mCPR",
-    "unmet_need_spacing":    "Unmet need for spacing",
-    "unmet_demand":          "Unmet demand",
-    "demand_satisfied":      "Demand satisfied (modern methods)",
-    "aware_modern":          "Awareness of methods (all)",
-    "aware_modern_nonusers": "Awareness of methods (non-users)",
-}
-
-
 def render_headline(df_headline):
     st.subheader("Key indicators")
     if df_headline is None or df_headline.empty:
@@ -377,29 +363,13 @@ def render_headline(df_headline):
         )
         return
 
-    table = (
-        df_headline.pivot(index="metric", columns="population", values="value")
-        .reindex(index=list(HEADLINE_METRICS), columns=list(HEADLINE_POPULATIONS))
-        .rename(index=HEADLINE_METRICS, columns=HEADLINE_POPULATIONS)
-        .mul(100)
-        .rename_axis("Indicator")
-        .reset_index()
-    )
-    st.dataframe(
-        table,
-        use_container_width=True,
-        hide_index=True,
-        column_config={
-            label: st.column_config.NumberColumn(label, format="%.1f%%")
-            for label in HEADLINE_POPULATIONS.values()
-        },
-    )
+    ki.show(ki.headline_table(df_headline))
 
     n = df_headline.pivot(index="metric", columns="population", values="n_unweighted")
     n_note = " · ".join(
         f"{label}: N = {int(n.loc['mcpr', pop])} "
         f"({int(n.loc['aware_modern_nonusers', pop])} non-users)"
-        for pop, label in HEADLINE_POPULATIONS.items() if pop in n.columns
+        for pop, label in ki.HEADLINE_POPULATIONS.items() if pop in n.columns
     )
     with st.expander("How each indicator is calculated"):
         st.markdown(
@@ -408,18 +378,23 @@ def render_headline(df_headline):
             "- **mCPR** — currently using a modern/effective method "
             "(`current_use_methods`; same definition as the funnel's \"Using an "
             "effective method\" stage).\n"
-            "- **Unmet need for spacing** — wants to wait 1+ years before the next "
-            "pregnancy (`time_before_preferred_pregnancy` = 1–2 years or more than 2 "
-            "years) but not currently using any method. Excludes those who want no "
-            "more children (limiting).\n"
-            "- **Unmet demand** — unmet need (spacing or limiting) AND says they "
-            "intend to use contraception in future (`future_intent`).\n"
-            "- **Demand satisfied** — mCPR ÷ (total CPR [any method] + unmet need "
-            "[spacing or limiting]), the official DHS formula.\n"
+            "- **Unmet need** — wants to wait more than 2 years before the next "
+            "pregnancy, or wants no more children (`time_before_preferred_pregnancy`), "
+            "but not currently using any method; traditional methods count as using. "
+            "\"1–2 years\" is not counted: that answer straddles the 2-year line DHS "
+            "uses, so including it would over-count.\n"
+            "- **Unmet demand** — unmet need AND says they would be open to using "
+            "contraception in future (`future_intent`).\n"
+            "- **Demand satisfied** — mCPR ÷ (total CPR [any method] + unmet need), "
+            "the official DHS formula.\n"
             "- **Awareness of methods (all)** — named at least one modern method "
             "(`known_contraceptive_options`).\n"
             "- **Awareness of methods (non-users)** — same, among respondents not "
             "currently using any method (`current_use` ≠ Yes).\n\n"
+            "**95% confidence intervals** account for the clustered sample design: "
+            "the surveyed settlements are resampled within each region 1,000 times "
+            "(Rao–Wu bootstrap) and the interval is the middle 95% of the resulting "
+            "estimates.\n\n"
             f"Unweighted N — {n_note}"
         )
 
@@ -430,7 +405,7 @@ def render_unmet(df_unmet, df_funnel, split_col):
     """2026-09-04, ported from benin_app."""
     st.subheader("Unmet need & unmet demand")
     st.caption(
-        "**Unmet need** — wants to delay her next pregnancy by a year or more, "
+        "**Unmet need** — wants to delay her next pregnancy by more than 2 years, "
         "or wants no more children, but isn't currently using any method "
         "(traditional methods still count as \"using\" here, the same "
         "treatment as the \"Currently using\" funnel stage). **Unmet demand** "

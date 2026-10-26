@@ -33,7 +33,10 @@ from src.data_loader import (
     load_method_switching_unlinked, load_method_switching_crosstab_unlinked,
     load_unmet_need_change_unlinked, load_attitudes_change_unlinked,
     load_barriers_change_unlinked,
+    # Key indicators (both modes, one file)
+    load_key_indicators_change,
 )
+from src import key_indicators as ki
 
 FEM_ORANGE = "#C1693A"
 FEM_NAVY   = "#2E3F52"
@@ -221,6 +224,77 @@ def _pending_note() -> None:
 
 def _population_caption(is_linked: bool, linked_text: str, cross_text: str) -> None:
     st.caption(linked_text if is_linked else cross_text)
+
+
+# ── Key Indicators ────────────────────────────────────────────────────────────
+
+def _render_key_indicators(is_linked: bool) -> None:
+    df = load_key_indicators_change()
+    if df is None or df.empty:
+        st.info("Data pending — run 3_linkage/attrition_weights.py then "
+                "compare_key_indicators.py, and upload key_indicators_change.csv "
+                "(see data_loader.py).")
+        return
+    sub = df[df["mode"] == ("longitudinal" if is_linked else "cross_sectional")]
+
+    _population_caption(
+        is_linked,
+        "The SAME 471 linked respondents at both waves, weighted identically "
+        "(attrition-adjusted baseline weights).",
+        "The FULL formative baseline (968, survey weights) vs. each round's "
+        "Phone Pulse respondents who could be linked to the baseline (471 for "
+        "round 1, attrition-adjusted baseline weights).",
+    )
+    st.warning(
+        "⚠️ Phone Pulse only measures mCPR and awareness. It never asked when "
+        "respondents want their next child, or whether they'd use contraception in "
+        "future, so unmet need, unmet demand and demand satisfied show as "
+        "\"Not asked\". Awareness was read aloud at follow-up but unprompted at "
+        "baseline, so part of its rise is a measurement effect."
+    )
+
+    def baseline_lookup(pop):
+        def f(metric):
+            r = sub[(sub["population"] == pop) & (sub["metric"] == metric)]
+            if r.empty:
+                return None
+            r = r.iloc[0]
+            return r["baseline_value"], r["baseline_ci_low"], r["baseline_ci_high"]
+        return f
+
+    def round_lookup(pop, rnd):
+        def f(metric):
+            if rnd["status"] != "live":
+                return ki.PENDING
+            r = sub[(sub["population"] == pop) & (sub["metric"] == metric)
+                    & (sub["round"] == rnd["round_id"])]
+            if r.empty:
+                return ki.PENDING
+            r = r.iloc[0]
+            if r["followup_status"] == "not_asked":
+                return ki.NOT_ASKED
+            return r["followup_value"], r["followup_ci_low"], r["followup_ci_high"]
+        return f
+
+    for pop, pop_label in ki.HEADLINE_POPULATIONS.items():
+        st.markdown(f"**{pop_label}** — estimate (95% CI)")
+        waves = [("Baseline", baseline_lookup(pop))] + [
+            (_round_x_label(r), round_lookup(pop, r)) for r in ROUNDS
+        ]
+        ki.show(ki.change_table(pop, waves))
+
+    with st.expander("How the follow-up is weighted"):
+        st.markdown(
+            "Phone Pulse called back a subset of baseline respondents, and some "
+            "groups were much easier to reach by phone than others — for example, "
+            "men far more than women. Each follow-up respondent keeps their "
+            "baseline survey weight, divided by the estimated chance that someone "
+            "like them (same region, gender, age group and FP use) was reached. "
+            "People from hard-to-reach groups therefore count for more, so the "
+            "follow-up sample again resembles the full baseline. Respondents who "
+            "couldn't be linked to their baseline interview have no weight and are "
+            "left out."
+        )
 
 
 # ── Method Awareness ─────────────────────────────────────────────────────────
@@ -623,11 +697,11 @@ def _render_limitations(is_linked: bool) -> None:
 
 def _render_comparison_type(is_linked: bool) -> None:
     tabs = st.tabs([
-        "Method Awareness", "Current FP Use", "Method Switching",
+        "Key Indicators", "Method Awareness", "Current FP Use", "Method Switching",
         "Unmet Need", "Attitudes", "Barriers",
     ])
     renderers = [
-        _render_knowledge, _render_fp_use, _render_method_switching,
+        _render_key_indicators, _render_knowledge, _render_fp_use, _render_method_switching,
         _render_unmet_need, _render_attitudes, _render_barriers,
     ]
     for tab, renderer in zip(tabs, renderers):

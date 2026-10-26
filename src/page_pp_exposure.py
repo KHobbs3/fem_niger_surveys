@@ -85,17 +85,11 @@ def render() -> None:
     st.markdown("---")
 
     unmet = profile[profile["variable"] == "unmet_need_proxy"]
-    fp_use = profile[profile["variable"] == "fp_use"]
 
-    m1, m2 = st.columns(2)
+    m1, _ = st.columns(2)
     with m1:
         st.markdown("**Unmet need for contraception**")
         for _, r in unmet.iterrows():
-            st.metric(r["group"], f"{r['pct']:.1f}%" if pd.notna(r["pct"]) else "—",
-                      help=f"{int(r['count'])} respondents")
-    with m2:
-        st.markdown("**Currently using FP**")
-        for _, r in fp_use.iterrows():
             st.metric(r["group"], f"{r['pct']:.1f}%" if pd.notna(r["pct"]) else "—",
                       help=f"{int(r['count'])} respondents")
 
