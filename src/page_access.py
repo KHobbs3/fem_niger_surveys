@@ -179,31 +179,47 @@ def render_accessibility(df_travel, split_col):
             key="travel_nonusers",
         )
 
-    st.markdown("**Distance access gap**")
+    st.markdown("**Distance access gap — travel time vs. willingness to travel**")
     st.caption(
-        "Two groups — current/past users vs. everyone else (non-users) — compared on "
-        "how far they say they're willing to travel, and on their reported/expected "
-        "travel time. A gap between the two groups on either measure signals a "
-        "distance barrier; comparing the two charts also shows whether people are "
-        "actually traveling about as far as they say they're willing to."
+        "For each group, the maximum time they say they're willing to travel next to "
+        "their travel time (actual for current/past users, expected for non-users). "
+        "Where travel time exceeds willingness, distance is a barrier. "
+        "Non-users = everyone not a current/past user."
     )
-    gap_col1, gap_col2 = st.columns(2)
-    with gap_col1:
-        _hbar(
-            _get_metric(df_travel, "mean_wtt_by_group", "use_binary"),
-            "Average willingness to travel (minutes)",
-            pct=False,
-            caption="Current/past users vs. non-users (nonusers = everyone not a current/past user).",
-            key="wtt_by_group",
+    wtt = _get_metric(df_travel, "mean_wtt_by_group", "use_binary")
+    travel = _get_metric(df_travel, "mean_travel_by_group", "use_binary")
+    if wtt.empty or travel.empty:
+        st.warning(
+            "Willingness-to-travel comparison not available — `access_travel.csv` "
+            "predates it. Run `python pipeline/run_pipeline.py --pages access` and "
+            "re-upload `access_travel.csv` to Drive."
         )
-    with gap_col2:
-        _hbar(
-            _get_metric(df_travel, "mean_travel_by_group", "use_binary"),
-            "Average travel time (minutes)",
-            pct=False,
-            caption="Users' actual reported travel time vs. non-users' expected travel time.",
-            key="travel_by_group",
+    else:
+        groups = [g for g in ["Current/past users", "Non-users"] if g in wtt.index or g in travel.index]
+        fig = go.Figure([
+            go.Bar(
+                name=name, y=groups, x=[series.get(g) for g in groups],
+                orientation="h", marker_color=color,
+                text=[f"{series.get(g):.1f}" if pd.notna(series.get(g)) else "" for g in groups],
+                textposition="outside", cliponaxis=False,
+            )
+            for name, series, color in [
+                ("Willing to travel", wtt, FEM_TAUPE),
+                ("Travel time", travel, FEM_ORANGE),
+            ]
+        ])
+        fig.update_layout(
+            barmode="group",
+            xaxis=dict(title="Minutes (one way)", showgrid=False,
+                       range=[0, max(wtt.max(), travel.max()) * 1.25]),
+            yaxis=dict(showgrid=False, autorange="reversed"),
+            plot_bgcolor="rgba(0,0,0,0)",
+            paper_bgcolor="rgba(0,0,0,0)",
+            margin=dict(l=10, r=40, t=20, b=10),
+            height=260,
+            legend=dict(orientation="h", yanchor="bottom", y=1.02),
         )
+        st.plotly_chart(fig, use_container_width=True, key="travel_vs_wtt")
 
     with st.expander("How do people get to facilities? (transport modes)"):
         c1, c2 = st.columns(2)
