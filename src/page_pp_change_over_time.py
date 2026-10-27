@@ -253,16 +253,17 @@ def _render_key_indicators(is_linked: bool) -> None:
         "baseline, so part of its rise is a measurement effect."
     )
 
-    def baseline_lookup(pop):
+    # prefix "" = weighted columns, "unweighted_" = the same figures unweighted
+    def baseline_lookup(pop, prefix):
         def f(metric):
             r = sub[(sub["population"] == pop) & (sub["metric"] == metric)]
             if r.empty:
                 return None
             r = r.iloc[0]
-            return r["baseline_value"], r["baseline_ci_low"], r["baseline_ci_high"]
+            return r[f"{prefix}baseline_value"], r[f"{prefix}baseline_ci_low"], r[f"{prefix}baseline_ci_high"]
         return f
 
-    def round_lookup(pop, rnd):
+    def round_lookup(pop, rnd, prefix):
         def f(metric):
             if rnd["status"] != "live":
                 return ki.PENDING
@@ -273,27 +274,43 @@ def _render_key_indicators(is_linked: bool) -> None:
             r = r.iloc[0]
             if r["followup_status"] == "not_asked":
                 return ki.NOT_ASKED
-            return r["followup_value"], r["followup_ci_low"], r["followup_ci_high"]
+            return r[f"{prefix}followup_value"], r[f"{prefix}followup_ci_low"], r[f"{prefix}followup_ci_high"]
         return f
 
-    def change_lookup(pop, rnd):
+    def change_lookup(pop, rnd, prefix):
         def f(metric):
             r = sub[(sub["population"] == pop) & (sub["metric"] == metric)
                     & (sub["round"] == rnd["round_id"])]
-            if r.empty or "change_pp" not in r.columns or pd.isna(r.iloc[0]["change_pp"]):
+            if r.empty or f"{prefix}change_pp" not in r.columns or pd.isna(r.iloc[0][f"{prefix}change_pp"]):
                 return "—"
             r = r.iloc[0]
-            return ki.change_cell(r["change_pp"], r["change_ci_low_pp"], r["change_ci_high_pp"],
-                                  r["change_p_value"])
+            return ki.change_cell(r[f"{prefix}change_pp"], r[f"{prefix}change_ci_low_pp"],
+                                  r[f"{prefix}change_ci_high_pp"], r[f"{prefix}change_p_value"])
         return f
 
     live = [r for r in ROUNDS if r["status"] == "live"]
-    for pop, pop_label in ki.HEADLINE_POPULATIONS.items():
-        st.markdown(f"**{pop_label}** — estimate (95% CI)")
-        waves = [("Baseline", baseline_lookup(pop))] + [
-            (_round_x_label(r), round_lookup(pop, r)) for r in ROUNDS
-        ] + [(f"Change vs baseline — {r['label']}", change_lookup(pop, r)) for r in live]
-        ki.show(ki.change_table(pop, waves))
+
+    def tables(prefix):
+        for pop, pop_label in ki.HEADLINE_POPULATIONS.items():
+            st.markdown(f"**{pop_label}** — estimate (95% CI)")
+            waves = [("Baseline", baseline_lookup(pop, prefix))] + [
+                (_round_x_label(r), round_lookup(pop, r, prefix)) for r in ROUNDS
+            ] + [(f"Change vs baseline — {r['label']}", change_lookup(pop, r, prefix)) for r in live]
+            ki.show(ki.change_table(pop, waves))
+
+    weighting = st.selectbox(
+        "Estimates", ["Weighted", "Unweighted"], key="ki_weighting",
+        help="Weighted = survey / attrition weights (headline figures). Unweighted = "
+             "every respondent counts once, for comparison.",
+    )
+    unweighted = weighting == "Unweighted"
+    if not unweighted:
+        tables("")
+    elif "unweighted_baseline_value" not in sub.columns:
+        st.info("Unweighted figures pending — re-run compare_key_indicators.py and "
+                "re-upload key_indicators_change.csv (see data_loader.py).")
+    else:
+        tables("unweighted_")
     st.caption(
         "Change = follow-up minus baseline, in percentage points (pp), with its 95% CI "
         "and p-value. p < 0.05 means the change is unlikely to be chance alone; a larger "
@@ -301,6 +318,34 @@ def _render_key_indicators(is_linked: bool) -> None:
         "nothing changed. Awareness rises are partly due to the question being read "
         "aloud at follow-up but not at baseline."
     )
+
+    if unweighted and "unweighted_baseline_value" in sub.columns:
+        st.caption(
+            "The same respondents and indicators as the weighted view, but every "
+            "respondent counts once (no survey or attrition weights). CIs and p-values "
+            "use the same settlement-level bootstrap as the weighted figures."
+        )
+        st.caption(
+            "**Reading the unweighted figures.** *Useful for:* comparing them with the "
+            "weighted figures shows how much the weights drive each result. If the two "
+            "agree, the finding doesn't depend on the weighting. If they diverge, a small "
+            "number of heavily weighted respondents (e.g. women who were hard to reach by "
+            "phone) are doing much of the work, and that estimate is more fragile than its "
+            "CI suggests. Unweighted figures also show what the people actually "
+            "interviewed reported, without modelling. Their CIs are usually narrower, "
+            "because weighting adds variance. "
+            "*Limited because:* they describe the respondents, not the population. The "
+            "sample over-represents some groups (settlements were sampled unequally, and "
+            "men were far easier to reach by phone), so these are not population "
+            "estimates and shouldn't be quoted as such. In the cross-sectional view, an "
+            "unweighted change mixes real change with differences in *who* answered each "
+            "wave. Correcting that is exactly what the attrition weights are for. The "
+            "longitudinal view has less of this problem because the same people answer "
+            "both waves, but it still describes the panel, not the population. Narrower "
+            "CIs don't make the estimate more accurate: they gain precision by accepting "
+            "bias. The measurement caveats above (phone vs. in-person, aided vs. unaided "
+            "awareness) apply equally."
+        )
 
     with st.expander("How the follow-up is weighted"):
         st.markdown(
