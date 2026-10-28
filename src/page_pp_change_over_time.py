@@ -35,13 +35,10 @@ from src.data_loader import (
     load_barriers_change_unlinked,
     # Key indicators (both modes, one file)
     load_key_indicators_change,
-    # Campaign exposure vs baseline (3_linkage/compare_exposure_rounds.py)
-    _load_pp, EXPOSURE_BY_ROUND_ID,
     # Airing timeline
     load_airing_schedule, load_survey_windows,
 )
 from src import key_indicators as ki
-from src.page_pp_exposure import _baseline_change_table, ROUND_LABELS as EXPOSURE_ROUND_LABELS
 
 FEM_ORANGE = "#C1693A"
 FEM_NAVY   = "#2E3F52"
@@ -247,40 +244,6 @@ ATTITUDE_INDICATORS = {
 }
 
 
-def _render_exposure_vs_baseline(weighting: str) -> None:
-    """Awareness and recall, Treatment vs Comparison, baseline -> each live round for the
-    same linked people (exposure_by_round.csv). Same in both comparison modes."""
-    st.markdown("#### Campaign exposure: change since baseline, Treatment vs Comparison")
-    try:
-        df = _load_pp(EXPOSURE_BY_ROUND_ID)
-    except Exception as e:
-        st.info("Data pending: run 3_linkage/compare_exposure_rounds.py and upload "
-                f"exposure_by_round.csv ({type(e).__name__}: {str(e)[:150]}).")
-        return
-    if "baseline_pct" not in df.columns:
-        st.info("Data pending: re-run 3_linkage/compare_exposure_rounds.py (it now adds the baseline "
-                "columns) and re-upload exposure_by_round.csv over the same Drive file.")
-        return
-    st.caption("The same linked people at baseline and in each round, in the group their phone "
-               "answers put them in. Treatment = lives in a FEM partner station's area and listened "
-               "to it in the past month; Comparison = everyone else.")
-    for rnd in [r["round_id"] for r in ROUNDS if r["status"] == "live"]:
-        sub = df[(df["round"] == rnd) & (df["weighting"] == weighting.lower())]
-        if sub.empty:
-            continue
-        label = EXPOSURE_ROUND_LABELS.get(rnd, rnd)
-        st.markdown(f"**Baseline → {label}** — {weighting.lower()}")
-        st.markdown(_baseline_change_table(sub, label), unsafe_allow_html=True)
-    st.caption(
-        "Recall can't be compared: the baseline asked no question about hearing FP programmes or "
-        "the recommended wait after a birth, and the campaign had not started. Awareness: the "
-        "baseline asked people to list methods unprompted, and only asked those who said they knew "
-        "an effective method (everyone else counts as not aware), so part of any rise reflects the "
-        "question, not the campaign. The question change should affect both groups similarly, so the "
-        "last column (Treatment change minus Comparison change) is the better guide to a campaign "
-        "effect, though the groups were not randomised. Hover an indicator for counts.")
-
-
 def _render_key_indicators(is_linked: bool) -> None:
     df = load_key_indicators_change()
     if df is None or df.empty:
@@ -387,7 +350,6 @@ def _render_key_indicators(is_linked: bool) -> None:
             "linked respondents."
         )
 
-    _render_exposure_vs_baseline(weighting)
 
     if unweighted and "unweighted_baseline_value" in sub.columns:
         st.caption(
