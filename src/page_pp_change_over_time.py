@@ -228,6 +228,16 @@ def _population_caption(is_linked: bool, linked_text: str, cross_text: str) -> N
 
 # ── Key Indicators ────────────────────────────────────────────────────────────
 
+# Attitude items in key_indicators_change.csv (3_linkage/compare_key_indicators.py,
+# ATTITUDE_METRICS): % holding the view among those who answered the item.
+ATTITUDE_INDICATORS = {
+    "att_infertility_myth":    "Believes FP can cause infertility (myth)",
+    "att_against_religion":    "Believes FP goes against their religion/beliefs",
+    "att_confident_choosing":  "Feels confident/knowledgeable choosing a method",
+    "att_dismissive_planning": "Dismissive of FP importance/planning",
+}
+
+
 def _render_key_indicators(is_linked: bool) -> None:
     df = load_key_indicators_change()
     if df is None or df.empty:
@@ -290,6 +300,8 @@ def _render_key_indicators(is_linked: bool) -> None:
 
     live = [r for r in ROUNDS if r["status"] == "live"]
 
+    has_attitudes = sub["metric"].isin(ATTITUDE_INDICATORS).any()
+
     def tables(prefix):
         for pop, pop_label in ki.HEADLINE_POPULATIONS.items():
             st.markdown(f"**{pop_label}** — estimate (95% CI)")
@@ -297,6 +309,11 @@ def _render_key_indicators(is_linked: bool) -> None:
                 (_round_x_label(r), round_lookup(pop, r, prefix)) for r in ROUNDS
             ] + [(f"Change vs baseline — {r['label']}", change_lookup(pop, r, prefix)) for r in live]
             ki.show(ki.change_table(pop, waves))
+            if has_attitudes:
+                st.markdown(f"**{pop_label} — attitudes** (% holding the view, of those who "
+                            "answered) — estimate (95% CI)")
+                ki.show(ki.change_table(pop, waves, metrics=ATTITUDE_INDICATORS).rename(
+                    columns={"Indicator": "Attitude"}))
 
     weighting = st.selectbox(
         "Estimates", ["Weighted", "Unweighted"], key="ki_weighting",
@@ -318,6 +335,16 @@ def _render_key_indicators(is_linked: bool) -> None:
         "nothing changed. Awareness rises are partly due to the question being read "
         "aloud at follow-up but not at baseline."
     )
+    if has_attitudes:
+        st.caption(
+            "**Attitudes** use a best-effort match between the two surveys, which don't ask "
+            "the same statements: baseline = agreed with a formative statement shown to a "
+            "random subset of respondents (Agree / Disagree answers only); follow-up = scored "
+            "3 or 4 on the Phone Pulse 0–4 item. The wording and scale differ, so treat changes "
+            "as directional. Same weights, populations and bootstrap as the indicators above; "
+            "the Attitudes tab shows the unweighted paired (McNemar) comparison for the "
+            "linked respondents."
+        )
 
     if unweighted and "unweighted_baseline_value" in sub.columns:
         st.caption(
@@ -563,25 +590,88 @@ def _render_method_switching(is_linked: bool) -> None:
             st.markdown("#### Baseline category → Round 1 category")
             st.dataframe(ct, use_container_width=True, hide_index=True)
     else:
-        r1 = df[df["round"] == "round1"]
-        if not r1.empty:
-            fig = go.Figure()
-            fig.add_trace(go.Bar(x=r1["baseline_pct"], y=r1["category"], orientation="h",
-                                  name="Baseline", marker_color=FEM_TAUPE,
-                                  text=r1["baseline_pct"].map(lambda v: f"{v:.1f}%"), textposition="outside"))
-            fig.add_trace(go.Bar(x=r1["pulse_pct"], y=r1["category"], orientation="h",
-                                  name="Round 1", marker_color=FEM_NAVY,
-                                  text=r1["pulse_pct"].map(lambda v: f"{v:.1f}%"), textposition="outside"))
-            fig.update_layout(**_CHART, title="Current-method mix: baseline vs. Round 1",
-                               barmode="group", xaxis_title="% of full sample",
-                               xaxis_range=[0, 115], height=320,
-                               margin=dict(l=10, r=30, t=60, b=10),
-                               legend=dict(orientation="h", yanchor="bottom", y=1.15))
-            st.plotly_chart(fig, use_container_width=True)
-            p = r1["chi_square_p_value"].iloc[0]
-            if pd.notna(p):
-                st.caption(f"Chi-square test of independence across the full mix: p = {p:.4f} "
-                           f"({'significant' if p < SIG_THRESHOLD else 'not significant'}).")
+        _render_method_mix_timeseries(df)
+
+
+def _render_method_mix_timeseries(df: pd.DataFrame) -> None:
+    """Cross-sectional method mix: one line per category (Baseline -> each round),
+    with 95% CIs where the CSV has them, and a table of estimates, CIs and p-values."""
+    has_ci = {"baseline_ci_low", "pulse_ci_low"} <= set(df.columns)
+    x_labels = ["Baseline"] + [_round_x_label(r) for r in ROUNDS]
+    fig = go.Figure()
+    for i, cat in enumerate(df["category"].dropna().unique()):
+        sub = df[df["category"] == cat]
+        first = sub.iloc[0]
+        pts = [(first["baseline_pct"], first.get("baseline_ci_low"), first.get("baseline_ci_high"))]
+        for r in ROUNDS:
+            row = sub[sub["round"] == r["round_id"]]
+            if r["status"] != "live" or row.empty:
+                pts.append((None, None, None))
+            else:
+                row = row.iloc[0]
+                pts.append((row["pulse_pct"], row.get("pulse_ci_low"), row.get("pulse_ci_high")))
+        y = [v for v, _, _ in pts]
+        err = dict(type="data", symmetric=False, thickness=1.2, width=4,
+                   array=[(hi - v) if v is not None and pd.notna(hi) else None for v, _, hi in pts],
+                   arrayminus=[(v - lo) if v is not None and pd.notna(lo) else None for v, lo, _ in pts]) \
+            if has_ci else None
+        fig.add_trace(go.Scatter(
+            x=x_labels, y=y, mode="lines+markers+text", name=str(cat),
+            text=[f"{v:.1f}%" if v is not None else "" for v in y], textposition="middle right",
+            line=dict(color=PALETTE[i % len(PALETTE)], width=2), marker=dict(size=9),
+            error_y=err, connectgaps=False, hovertemplate="%{x}: %{y:.1f}%<extra>" + str(cat) + "</extra>",
+        ))
+    fig.update_layout(
+        **_CHART, title=dict(text="Current-method mix over time", y=0.97),
+        yaxis_title="% of full sample", yaxis_range=[0, 100], height=420,
+        margin=dict(l=10, r=30, t=90, b=10),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
+    )
+    st.plotly_chart(fig, use_container_width=True)
+    _pending_note()
+
+    def est(v, lo, hi):
+        if pd.isna(v):
+            return "—"
+        return f"{v:.1f}% ({lo:.1f}–{hi:.1f}%)" if has_ci and pd.notna(lo) else f"{v:.1f}%"
+
+    live = [r for r in ROUNDS if r["status"] == "live"]
+    rows = []
+    for cat in df["category"].dropna().unique():
+        sub = df[df["category"] == cat]
+        first = sub.iloc[0]
+        row = {"Category": cat, "Baseline": est(first["baseline_pct"], first.get("baseline_ci_low"),
+                                                   first.get("baseline_ci_high"))}
+        for r in live:
+            rr = sub[sub["round"] == r["round_id"]]
+            if rr.empty:
+                row[r["label"]] = "—"
+                continue
+            rr = rr.iloc[0]
+            row[r["label"]] = est(rr["pulse_pct"], rr.get("pulse_ci_low"), rr.get("pulse_ci_high"))
+            row[f"Change vs baseline — {r['label']}"] = f"{rr['pulse_pct'] - rr['baseline_pct']:+.1f} pp".replace("-", "−")
+            if "ztest_p_value" in rr.index:
+                row[f"p-value — {r['label']}"] = rr["ztest_p_value"]
+        rows.append(row)
+    table = pd.DataFrame(rows)
+    st.markdown("**Estimate (95% CI)**")
+    st.dataframe(table, use_container_width=True, hide_index=True, column_config={
+        c: st.column_config.NumberColumn(c, format="%.4f") for c in table.columns if c.startswith("p-value")
+    })
+    notes = []
+    for r in live:
+        rr = df[df["round"] == r["round_id"]]
+        if not rr.empty and pd.notna(rr["chi_square_p_value"].iloc[0]):
+            p = rr["chi_square_p_value"].iloc[0]
+            notes.append(f"{r['label']}: whole mix, chi-square test of independence p = {p:.4f} "
+                         f"({'significant' if p < SIG_THRESHOLD else 'not significant'})")
+    st.caption(
+        "Unweighted shares of each wave's full sample. CIs are 95% Wilson intervals; each "
+        "category's p-value is a two-proportion z-test of its change from baseline (p < 0.05 = "
+        "unlikely to be chance alone). " + "; ".join(notes) + "."
+        + ("" if has_ci else " CIs and per-category p-values appear once "
+           "method_switching_summary_unlinked.csv is regenerated and re-uploaded.")
+    )
 
 
 # ── Unmet Need ────────────────────────────────────────────────────────────────
