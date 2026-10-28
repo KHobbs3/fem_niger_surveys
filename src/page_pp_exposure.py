@@ -6,7 +6,7 @@ import pandas as pd
 
 from src.data_loader import (
     load_pp_exposure_profile, load_pp_exposure_fp_use,
-    load_pp_exposure_attitudes, load_pp_exposure_partner_norms, load_exposure_by_round,
+    load_pp_exposure_attitudes, load_pp_exposure_partner_norms, _load_pp, EXPOSURE_BY_ROUND_ID,
 )
 
 FEM_NAVY   = "#2E3F52"
@@ -167,11 +167,19 @@ def _baseline_change_table(sub: pd.DataFrame, round_label: str) -> str:
 
 
 def _render_recall_awareness() -> None:
-    df = load_exposure_by_round()
-    if df is None:
+    try:   # load directly (not load_exposure_by_round) so a failed download says why
+        df = _load_pp(EXPOSURE_BY_ROUND_ID)
+    except Exception as e:
         st.info("Data pending: run `3_linkage/compare_exposure_rounds.py`, upload "
                 "`3_linkage/outputs/exposure_by_round.csv` to Drive and paste its ID into "
                 "`data_loader.py` (EXPOSURE_BY_ROUND_ID).")
+        st.caption(f"Could not read the file from Drive ({type(e).__name__}: {str(e)[:200]}). "
+                   "Check it is shared as 'Anyone with the link'.")
+        return
+    if "round" not in df.columns:
+        st.error("exposure_by_round.csv didn't load as the expected CSV (no `round` column). Columns "
+                 f"read: {', '.join(map(str, df.columns[:8]))}. Usually the Drive file isn't shared as "
+                 "'Anyone with the link', so Drive returned a sign-in page instead of the file.")
         return
     rounds = [r for r in ROUND_LABELS if r in set(df["round"])]
     c1, c2 = st.columns(2)
