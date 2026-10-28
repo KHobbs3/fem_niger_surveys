@@ -7,7 +7,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
 from src.data_loader import (
-    load_drivers_barriers, parse_subgroup_prevalence,
+    load_drivers_barriers, load_driver_barrier_groups, parse_subgroup_prevalence,
     parse_statements, get_priority_sort_key,
     USER_CATEGORY_LABELS, AGE_GROUPS, GENDERS,
 )
@@ -68,29 +68,32 @@ def build_overview_chart(df, db_type, split_key="user_category", metric="prevale
         "gender":        "GENDER: Weighted N (All)",
         "age":           "AGE_GROUP: Weighted N (All)",
     }
-    UNWGT_PREV_COL_MAP = {
-        "user_category": "Unweighted Prevalence (All)",
-        "gender":        "GENDER: Unweighted Prevalence (All)",
-        "age":           "AGE_GROUP: Unweighted Prevalence (All)",
+    # "Prevalence" columns are UNWEIGHTED (03_driver_barrier_table_w_counts);
+    # the "Weighted Prevalence" columns are the weighted %.
+    WGT_PREV_COL_MAP = {
+        "user_category": "Weighted Prevalence (All)",
+        "gender":        "GENDER: Weighted Prevalence (All)",
+        "age":           "AGE_GROUP: Weighted Prevalence (All)",
     }
     prev_col = PREV_COL_MAP.get(split_key, "Prevalence (All)")
     data_col = {
         "prevalence":            prev_col,
         "raw_n":                 RAW_N_COL_MAP.get(split_key, "N (All)"),
         "weighted_n":            WGT_N_COL_MAP.get(split_key, "Weighted N (All)"),
-        "unweighted_prevalence": UNWGT_PREV_COL_MAP.get(split_key, "Unweighted Prevalence (All)"),
+        "weighted_prevalence":   WGT_PREV_COL_MAP.get(split_key, "Weighted Prevalence (All)"),
     }.get(metric, prev_col)
 
     records = []
     for _, row in df.iterrows():
         data = parse_subgroup_prevalence(row.get(data_col, ""))
-        if not data and metric != "prevalence":
+        if not data and metric not in ("prevalence", "weighted_prevalence"):
             # count column not yet in data — fall back to prevalence
             data = parse_subgroup_prevalence(row.get(prev_col, ""))
-        if not data:
-            # fallback: try the user_category column
+        if not data and metric != "weighted_prevalence":
+            # fallback: try the user_category column (never for weighted --
+            # that would show unweighted figures under a weighted label)
             data = parse_subgroup_prevalence(row.get("Prevalence (All)", ""))
-        if not data:
+        if not data and metric != "weighted_prevalence":
             # last resort: single bar from averaged value
             avg = _overall_prevalence(row)
             data = {"Overall": avg} if avg is not None else {}
@@ -135,14 +138,14 @@ def build_overview_chart(df, db_type, split_key="user_category", metric="prevale
 
     # ── One trace per subgroup ─────────────────────────────────────────────
     is_counts = metric in ("raw_n", "weighted_n")
-    is_pct    = metric in ("prevalence", "unweighted_prevalence")
+    is_pct    = metric in ("prevalence", "weighted_prevalence")
     traces = []
     for grp in all_groups:
         x_vals = [row_data.get(grp, None) for row_data in plot_df["data"]]
         if is_counts:
             text_vals = [f"{int(v):,}" if v is not None else "" for v in x_vals]
             hover = "<b>%{y}</b><br>" + grp + ": %{x:,}<br>Priority: %{customdata}<extra></extra>"
-        else:  # prevalence or unweighted_prevalence
+        else:  # prevalence (unweighted) or weighted_prevalence
             text_vals = [f"{v:.1f}%" if v is not None else "" for v in x_vals]
             hover = "<b>%{y}</b><br>" + grp + ": %{x:.1f}%<br>Priority: %{customdata}<extra></extra>"
         traces.append(go.Bar(
@@ -201,8 +204,8 @@ def build_overview_chart(df, db_type, split_key="user_category", metric="prevale
         default=10,
     )
 
-    metric_labels = {"prevalence": "prevalence", "raw_n": "raw n", "weighted_n": "weighted n", "unweighted_prevalence": "unweighted prevalence"}
-    axis_titles   = {"prevalence": "% of respondents", "raw_n": "Respondents (n)", "weighted_n": "Weighted respondents", "unweighted_prevalence": "% of respondents (unweighted)"}
+    metric_labels = {"prevalence": "unweighted prevalence", "raw_n": "raw n", "weighted_n": "weighted n", "weighted_prevalence": "weighted prevalence"}
+    axis_titles   = {"prevalence": "% of respondents (unweighted)", "raw_n": "Respondents (n)", "weighted_n": "Weighted respondents", "weighted_prevalence": "% of respondents (weighted)"}
     fig.update_layout(
         title=f"All {db_type}s — {metric_labels.get(metric, 'prevalence')} by {split_key.replace('_', ' ')}",
         barmode="group",
@@ -252,10 +255,10 @@ def build_prevalence_bar(row, split="user_category", metric="prevalence"):
         "gender":        "GENDER: Weighted N (All)",
         "age":           "AGE_GROUP: Weighted N (All)",
     }
-    UNWGT_PREV_COL = {
-        "user_category": "Unweighted Prevalence (All)",
-        "gender":        "GENDER: Unweighted Prevalence (All)",
-        "age":           "AGE_GROUP: Unweighted Prevalence (All)",
+    WGT_PREV_COL = {
+        "user_category": "Weighted Prevalence (All)",
+        "gender":        "GENDER: Weighted Prevalence (All)",
+        "age":           "AGE_GROUP: Weighted Prevalence (All)",
     }
 
     prev_col = PREV_COL.get(split)
@@ -272,12 +275,12 @@ def build_prevalence_bar(row, split="user_category", metric="prevalence"):
     else:
         labels = list(prev_data.keys())
 
-    # ── Unweighted prevalence % ───────────────────────────────────────────────
-    if metric == "unweighted_prevalence":
-        unwgt_col  = UNWGT_PREV_COL.get(split)
+    # ── Weighted prevalence % ─────────────────────────────────────────────────
+    if metric == "weighted_prevalence":
+        unwgt_col  = WGT_PREV_COL.get(split)
         unwgt_data = parse_subgroup_prevalence(row.get(unwgt_col, "")) if unwgt_col else {}
         if not unwgt_data:
-            return build_prevalence_bar(row, split, metric="prevalence")
+            return None   # no weighted column for this split -- don't show unweighted under a weighted label
         if split == "user_category":
             u_labels = [USER_CATEGORY_LABELS.get(k, k) for k in unwgt_data]
         else:
@@ -301,7 +304,7 @@ def build_prevalence_bar(row, split="user_category", metric="prevalence"):
                 showticklabels=False,
                 showgrid=False,
                 zeroline=False,
-                title="% of respondents (unweighted)",
+                title="% of respondents (weighted)",
             ),
             yaxis=dict(showgrid=False),
             plot_bgcolor="rgba(0,0,0,0)",
@@ -373,6 +376,7 @@ def build_prevalence_bar(row, split="user_category", metric="prevalence"):
             showticklabels=False,
             showgrid=False,
             zeroline=False,
+            title="% of respondents (unweighted)",
         ),
         yaxis=dict(showgrid=False),
         plot_bgcolor="rgba(0,0,0,0)",
@@ -423,6 +427,81 @@ def build_statement_chart(row, split="user_category"):
 
 # ── Main render ───────────────────────────────────────────────────────────────
 
+GROUP_SPLITS = {"user_category": "use", "gender": "gender", "age": "age_group", "region": "region"}
+
+
+def _group_label(g):
+    low = str(g).lower()
+    if "femme" in low:
+        return "Women"
+    if "homme" in low:
+        return "Men"
+    return USER_CATEGORY_LABELS.get(g, str(g)) if isinstance(USER_CATEGORY_LABELS, dict) else str(g)
+
+
+GROUP_METRIC_COLS = {"prevalence": "unweighted_proportion", "weighted_prevalence": "proportion",
+                     "raw_n": "n", "weighted_n": "weighted_n"}
+
+
+def render_parent_groups(db_type, split_key, metric="prevalence"):
+    """Options grouped by parent category (text before ':'), from
+    driver_barrier_groups.csv (pipeline: --pages driver_barrier_groups).
+    Follows the page's Metric selector."""
+    st.markdown("### Grouped by parent category")
+    df = load_driver_barrier_groups()
+    if df is None:
+        st.info("Grouped data not found. Run "
+                "`python -m pipeline.run_pipeline --pages driver_barrier_groups` (from pipeline_output/).")
+        return
+    df = df[df["type"].str.lower() == db_type.lower()]
+    threshold = st.radio("Respondents who picked", ["at least 1", "at least 3"], horizontal=True,
+                         key="grp_threshold",
+                         help="Options of the same parent category, e.g. any 1 or any 3 side effects. "
+                              "'At least 3' is only shown for categories with 3+ options.")
+    df = df[df["threshold"] == threshold]
+    if df.empty:
+        st.info("No categories for this selection.")
+        return
+    col = GROUP_METRIC_COLS.get(metric, "proportion")
+    if col not in df.columns:
+        st.info(f"'{col}' not in driver_barrier_groups.csv yet. Re-run "
+                "`python -m pipeline.run_pipeline --pages driver_barrier_groups`.")
+        return
+    is_pct = col in ("proportion", "unweighted_proportion")
+    scale = 100 if is_pct else 1
+    st.caption({
+        "proportion": "Weighted % of respondents who answered the list.",
+        "unweighted_proportion": "Unweighted % of respondents who answered the list.",
+        "n": "Number of respondents (unweighted).",
+        "weighted_n": "Weighted number of respondents.",
+    }[col] + " Options are grouped by the text before ':' in the answer label.")
+
+    overall = df[df["split"] == "none"].set_index("parent")
+    order = overall[col].sort_values(ascending=True).index.tolist()
+    split = GROUP_SPLITS.get(split_key)
+    traces = [go.Bar(name="All", y=[p for p in order],
+                     x=overall.loc[order, col] * scale, orientation="h",
+                     marker_color=FEM_PALETTE[0])]
+    sub = df[df["split"] == split]
+    for i, grp in enumerate(sorted(sub["group"].dropna().unique()), 1):
+        g = sub[sub["group"] == grp].set_index("parent").reindex(order)
+        traces.append(go.Bar(name=_group_label(grp), y=[p for p in order],
+                             x=g[col] * scale, orientation="h",
+                             marker_color=FEM_PALETTE[i % len(FEM_PALETTE)]))
+    fig = go.Figure(traces)
+    fig.update_layout(
+        barmode="group",
+        xaxis=dict(ticksuffix="%" if is_pct else "", showgrid=False),
+        yaxis=dict(showgrid=False),
+        plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor="rgba(0,0,0,0)",
+        margin=dict(t=10, b=10, l=10, r=10),
+        height=max(320, len(order) * (14 * len(traces) + 12) + 80),
+        legend=dict(orientation="h", y=1.02, yanchor="bottom"),
+    )
+    st.plotly_chart(fig, use_container_width=True, key="grp_chart")
+
+
 def render(df_raw=None):
     st.header("Drivers & Barriers")
     st.caption(
@@ -445,8 +524,9 @@ main reasons for using or not using contraception.
 - **Low** — less common; may be relevant for specific sub-groups
 
 **Subgroup breakdowns** (user category, gender, age group) show the prevalence of each
-item within that subgroup. Weighted prevalence uses post-stratification survey weights to
-account for differences in sampling across regions and demographics.
+item within that subgroup. **Prevalence unweighted** is the share of respondents in the
+sample; **prevalence weighted** applies the post-stratification survey weights to account for
+differences in sampling across regions and demographics.
     """)
     st.markdown("")
 
@@ -470,20 +550,26 @@ account for differences in sampling across regions and demographics.
     with col4:
         metric_choice = st.selectbox(
             "Metric",
-            ["Prevalence (%)", "Unweighted prevalence (%)", "Raw n", "Weighted n"],
+            ["Prevalence unweighted (%)", "Prevalence weighted (%)", "Raw n", "Weighted n"],
             help=(
-                "Prevalence: weighted % of respondents who mentioned this item. "
-                "Unweighted prevalence: same but without survey weights applied. "
+                "Prevalence unweighted: % of respondents in the sample who mentioned this item. "
+                "Prevalence weighted: the same with survey weights applied. "
                 "Raw n: unweighted respondent count. "
                 "Weighted n: effective sample size after survey weights."
             ),
         )
     metric = {
-        "Prevalence (%)":            "prevalence",
-        "Unweighted prevalence (%)": "unweighted_prevalence",
+        "Prevalence unweighted (%)": "prevalence",
+        "Prevalence weighted (%)":   "weighted_prevalence",
         "Raw n":                     "raw_n",
         "Weighted n":                "weighted_n",
     }[metric_choice]
+
+    if metric == "weighted_prevalence" and "Weighted Prevalence (All)" not in df_raw.columns:
+        st.info("This drivers & barriers table has no weighted prevalence yet -- re-run "
+                "table_analysis/03_driver_barrier_table_w_counts.ipynb and re-upload it. "
+                "Showing unweighted prevalence.")
+        metric = "prevalence"
 
     split_key = {
         "User category": "user_category",
@@ -506,13 +592,16 @@ account for differences in sampling across regions and demographics.
     st.markdown("### Overview — all items at a glance")
     st.caption(
         "Bars coloured by priority level. "
-        "Prevalence = % of respondents who mentioned this as a main driver/barrier."
+        "Prevalence = % of respondents who mentioned this as a main driver/barrier "
+        "(unweighted unless 'Prevalence weighted (%)' is selected)."
     )
     st.plotly_chart(
         build_overview_chart(df, db_type, split_key=split_key, metric=metric),
         use_container_width=True,
         key="overview_chart",
     )
+
+    render_parent_groups(db_type, split_key, metric)
 
     # ── Detail cards (collapsible section) ───────────────────────────────────
     with st.expander(f"Detail cards — {len(df)} main {db_type.lower()}(s)", expanded=False):
@@ -538,8 +627,8 @@ account for differences in sampling across regions and demographics.
                 fig_prev = build_prevalence_bar(row, split_key, metric=metric)
                 if fig_prev:
                     card_label = {
-                        "prevalence":            "*Prevalence — % of respondents who mentioned this (weighted)*",
-                        "unweighted_prevalence": "*Unweighted prevalence — % of respondents who mentioned this*",
+                        "prevalence":            "*Prevalence unweighted — % of respondents who mentioned this*",
+                        "weighted_prevalence":   "*Prevalence weighted — % of respondents who mentioned this (survey weights)*",
                         "raw_n":                 "*Respondent counts (unweighted n)*",
                         "weighted_n":            "*Weighted respondent counts*",
                     }.get(metric, "")

@@ -211,18 +211,93 @@ def render_life_goals(df_goals, df_achievable, split_col):
         _hbar(_overall_series(df_achievable), "", top_n=4, key="pg_achievable")
 
 
+def _groups(df_long, split):
+    if df_long is None or "split" not in df_long.columns:
+        return []
+    return sorted(df_long.loc[df_long["split"] == split, "group"].dropna().unique())
+
+
+def _gender_label(g):
+    """'Femme  Nyɔnuwo' / 'Mace / Femme' -> 'Women'; raw value otherwise."""
+    low = str(g).lower()
+    if "femme" in low:
+        return "Women"
+    if "homme" in low:
+        return "Men"
+    return str(g)
+
+
+SMALL_GROUP_N = 30
+
+
+def _split_group(gender, age):
+    """(split, group) for the gender/age filters. Both set uses the
+    gender x age split ("gender_age") from etl_personality."""
+    if gender == "All" and age == "All":
+        return "none", "all"
+    if age == "All":
+        return "gender", gender
+    if gender == "All":
+        return "age_group", age
+    return "gender_age", f"{gender} | {age}"
+
+
+def _group_n(df_long, split, group):
+    """Respondents in the group (the % denominator), or None for older files without `n`."""
+    if df_long is None or "n" not in df_long.columns:
+        return None
+    n = df_long.loc[(df_long["split"] == split) & (df_long["group"] == group), "n"].dropna()
+    return int(n.iloc[0]) if len(n) else None
+
+
+def _with_n(label, n):
+    return label if n is None else f"{label} (n={n:,})"
+
+
+def _filtered_series(df_long, gender, age):
+    """Overall series, or one subgroup when the gender/age filters are set."""
+    split, group = _split_group(gender, age)
+    if split == "none":
+        return _overall_series(df_long)
+    sub = df_long[(df_long["split"] == split) & (df_long["group"] == group)]
+    return sub.set_index("label")["proportion"].sort_values(ascending=False)
+
+
 def render_role_models(df_models, df_traits, split_col):
     st.subheader("Role models")
     st.caption("Who do respondents look up to?")
 
+    f1, f2 = st.columns(2)
+    with f1:
+        gender = st.selectbox(
+            "Gender", ["All"] + _groups(df_models, "gender"),
+            format_func=lambda g: g if g == "All"
+            else _with_n(_gender_label(g), _group_n(df_models, "gender", g)),
+            key="rm_gender")
+    with f2:
+        age = st.selectbox(
+            "Age group", ["All"] + _groups(df_models, "age_group"),
+            format_func=lambda a: a if a == "All"
+            else _with_n(a, _group_n(df_models, "age_group", a)),
+            key="rm_age")
+    if (gender != "All" and age != "All" and df_models is not None
+            and "gender_age" not in set(df_models["split"])):
+        st.info("Gender + age data not generated yet. "
+                "Run `python -m pipeline.run_pipeline --pages personality`.")
+        return
+    n = _group_n(df_models, *_split_group(gender, age))
+    if n is not None:
+        st.caption(f"Based on {n:,} respondents."
+                   + (" Small group: read these percentages with care." if n < SMALL_GROUP_N else ""))
+
     col1, col2 = st.columns(2)
     with col1:
         if df_models is not None:
-            _hbar(_overall_series(df_models), "Role models (% mentioning)",
+            _hbar(_filtered_series(df_models, gender, age), "Role models (% mentioning)",
                   top_n=12, key="pg_rm")
     with col2:
         if df_traits is not None:
-            _hbar(_overall_series(df_traits), "Why do they look up to them?",
+            _hbar(_filtered_series(df_traits, gender, age), "Why do they look up to them?",
                   top_n=12, key="pg_traits")
 
     if df_models is not None:

@@ -26,7 +26,10 @@ def _load(file_id, **kwargs):
 def load_drivers_barriers():
     # df = pd.read_csv(path, low_memory=False)
     # df.columns = df.columns.str.strip()
-    return _load("1yr-zA6R7hNEexDGZj06KrO0m0Hb-hOYy") #"1_sKBFc3b32PjHatgIaBY-SSyKlSjCTTQ") - november 2025 version (4 user cats)
+    return _load("1mb-dUlF6NbPAGhCumiBD3RjnQUKHMZrT") # October 2026 version, "Autre" write-ins recoded (grouped non-users)
+                                                     # "1PcGQ7JcVYNLX33lzegacg9oF-uFSpkAa" - October 2026 version (4 user cats)
+                                                     # "1yr-zA6R7hNEexDGZj06KrO0m0Hb-hOYy" - previous version
+                                                     # "1_sKBFc3b32PjHatgIaBY-SSyKlSjCTTQ") - november 2025 version (4 user cats)
                                                      # "1xf4Gkm70WKMC0R_zN6SJZ9JSEqdZUMt9") - december 2025 version (4 user cats)
 
 
@@ -77,12 +80,14 @@ def clean_column_name(col):
 
 # @st.cache_data
 def load_radio_by_station():
-    df = _load("1MNO6t_yappsE5ZVp4l2jlZA7qvh1gs5i") #"1l2n9CJcenNTt7CUpf-krApXe9fDsi4r4") November 2025 version
+    df = _load("1JVWvJJ9NJ-_ckuA3pJ7pG1Kr7EiafHKR") # October 2026 version
+                                                   # "1MNO6t_yappsE5ZVp4l2jlZA7qvh1gs5i" - previous version
+                                                   # "1l2n9CJcenNTt7CUpf-krApXe9fDsi4r4") November 2025 version
     df.set_index(df.columns[0], inplace=True)
     return df
 
 def load_radio_by_state():
-    df = _load("1fMMjeFEEoM6EUgIPC4sNa5xcyi3lOakw")
+    df = _load("1gdouIgnApTvv_eQC1uz9OixY0LsNpcDE") # October 2026 version; "1fMMjeFEEoM6EUgIPC4sNa5xcyi3lOakw" previous version
     df.set_index(df.columns[0], inplace=True)
     return df
 
@@ -417,3 +422,16 @@ USER_CATEGORY_LABELS = {
 AGE_GROUPS  = ["16-20", "21-30", "31-45"]
 GENDERS     = ["Mace / Femme", "Namiji / Homme"]
 URBAN_RURAL = ["Rurale", "Semi-urbaine", "Urbaine"]
+
+
+# Parent-category groups of drivers/barriers (pipeline: --pages driver_barrier_groups).
+# Reads the local copy in data/ first; paste the Drive file ID here once uploaded.
+DRIVER_BARRIER_GROUPS_ID = ""
+
+
+def load_driver_barrier_groups():
+    path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                        "data", "driver_barrier_groups.csv")
+    if os.path.exists(path):
+        return pd.read_csv(path, index_col=0)
+    return _load(DRIVER_BARRIER_GROUPS_ID, index_col=0) if DRIVER_BARRIER_GROUPS_ID else None
