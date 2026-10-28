@@ -5,8 +5,8 @@ import plotly.graph_objects as go
 import pandas as pd
 
 from src.data_loader import (
-    load_pp_exposure_profile, load_pp_exposure_fp_awareness, load_pp_exposure_fp_use,
-    load_pp_exposure_attitudes, load_pp_exposure_partner_norms,
+    load_pp_exposure_profile, load_pp_exposure_fp_use,
+    load_pp_exposure_attitudes, load_pp_exposure_partner_norms, load_exposure_by_round,
 )
 
 FEM_NAVY   = "#2E3F52"
@@ -51,14 +51,126 @@ def _grouped_hbar(df: pd.DataFrame, title: str, xmax: float = 100) -> go.Figure:
     return fig
 
 
+ROUND_LABELS = {"round1": "Round 1 (~3 mo)", "round2_early": "Round 2 early group (Haddin Kay, ~5 mo)",
+                "round2": "Round 2 (~6 mo)"}
+INDICATOR_QUESTIONS = (
+    "**How each indicator is calculated** (Phone Pulse questions; share of everyone in the group — "
+    "anyone not asked, or answering don't know / refused, counts as no):\n"
+    "- **Heard FP programmes/ads** — `uptake_fp`: *\"In the last month, do you remember hearing "
+    "any radio programs or ads on the topics of maternal and child health, household fertility, "
+    "and spacing of births?\"* = Yes. Only asked of radio listeners (`radio_any` = Yes).\n"
+    "- **Knows the spacing message** — `knowledge_waiting`: *\"How long do doctors recommend "
+    "waiting after giving birth before trying to conceive again?\"* = \"At least two years\" "
+    "(the campaign's message).\n"
+    "- **Campaign recall** — both of the above.\n"
+    "- **Heard of a method** — `fpbeh_awarefp`: *\"I want you to think about methods you have heard "
+    "of for delaying or avoiding pregnancies...\"*, each method read out. **At least one modern "
+    "method** uses the baseline's modern list (Standard Days and LAM not counted).\n\n"
+    "**Groups**: Treatment = lives within a FEM partner station's coverage area and listened to "
+    "that station in the past month (`radio_partner_N_listen`); Comparison = everyone else. "
+    "**Weighted** = attrition weights (baseline weight ÷ chance of being reached in that round); "
+    "**unweighted** = the same respondents counted once. Only respondents linked to the baseline "
+    "are included. 95% CIs and two-sided p-values: cluster bootstrap over baseline settlements "
+    "(1,000 replicates; same draws for every group and round)."
+)
+
+
+def _fmt_pct(v, lo, hi):
+    return "—" if pd.isna(v) else f"{v:.1f}% ({lo:.1f}–{hi:.1f})"
+
+
+def _fmt_pp(v, lo, hi):
+    return "—" if pd.isna(v) else f"{v:+.1f} pp ({lo:+.1f} to {hi:+.1f})"
+
+
+def _fmt_p(p):
+    return "—" if pd.isna(p) else ("< 0.002" if p <= 0.002 else f"{p:.3f}")
+
+
+def _html_table(head: list[str], body_rows: list[str]) -> str:
+    th = "".join(f"<th style='text-align:{'left' if i == 0 else 'right'};padding:4px 8px'>{h}</th>"
+                 for i, h in enumerate(head))
+    return (f"<table style='width:100%;border-collapse:collapse'><thead><tr>{th}</tr></thead>"
+            f"<tbody>{''.join(body_rows)}</tbody></table>")
+
+
+def _row(label: str, hover: str, cells: list[str], bold: bool = False) -> str:
+    style = "padding:4px 8px;border-top:1px solid rgba(128,128,128,0.25);" + ("font-weight:600;" if bold else "")
+    tds = "".join(f"<td style='{style}text-align:right'>{c}</td>" for c in cells)
+    return (f"<tr><td style='{style}text-align:left'><span title='{hover}' "
+            f"style='border-bottom:1px dotted;cursor:help'>{label}</span></td>{tds}</tr>")
+
+
+def _exposure_table(sub: pd.DataFrame) -> str:
+    """Treatment vs Comparison, one row per indicator; hover the indicator for each group's N."""
+    head = ["Indicator", "Treatment (partner station listener)<br>% (95% CI)",
+            "Comparison (everyone else)<br>% (95% CI)", "Difference<br>(95% CI)", "p-value"]
+    rows = []
+    for section in sub["section"].drop_duplicates():
+        rows.append(f"<tr><td colspan='5' style='padding:10px 8px 2px;font-weight:600'>{section}</td></tr>")
+        for ind in sub.loc[sub["section"] == section, "indicator"].drop_duplicates():
+            g = sub[sub["indicator"] == ind].set_index("group")
+            t, c = g.loc["Treatment"], g.loc["Comparison"]
+            hover = (f"Treatment: {int(t['count'])} of N = {int(t['n'])}&#10;"
+                     f"Comparison: {int(c['count'])} of N = {int(c['n'])}")
+            rows.append(_row(t["label"], hover, [
+                _fmt_pct(t["pct"], t["ci_low"], t["ci_high"]), _fmt_pct(c["pct"], c["ci_low"], c["ci_high"]),
+                _fmt_pp(t["diff_vs_comparison_pp"], t["diff_ci_low_pp"], t["diff_ci_high_pp"]),
+                _fmt_p(t["diff_p_value"])], bold=ind in ("campaign_recall", "aware_modern")))
+    return _html_table(head, rows)
+
+
+def _round_change_table(sub: pd.DataFrame, round_label: str) -> str:
+    """This round vs round 1, per group; hover the indicator for N in each group."""
+    head = ["Indicator"] + [f"{g}<br>change (95% CI), p" for g in ("Treatment", "Comparison", "All")]
+    rows = []
+    for ind in sub["indicator"].drop_duplicates():
+        g = sub[sub["indicator"] == ind].set_index("group")
+        hover = "&#10;".join(f"{k}: N = {int(g.loc[k, 'n'])}" for k in ("Treatment", "Comparison", "All"))
+        rows.append(_row(g.iloc[0]["label"], hover, [
+            f"{_fmt_pp(g.loc[k, 'change_pp'], g.loc[k, 'change_ci_low_pp'], g.loc[k, 'change_ci_high_pp'])}"
+            f"<br>p = {_fmt_p(g.loc[k, 'change_p_value'])}" for k in ("Treatment", "Comparison", "All")],
+            bold=ind in ("campaign_recall", "aware_modern")))
+    return _html_table(head, rows)
+
+
+def _render_recall_awareness() -> None:
+    df = load_exposure_by_round()
+    if df is None:
+        st.info("Data pending: run `3_linkage/compare_exposure_rounds.py`, upload "
+                "`3_linkage/outputs/exposure_by_round.csv` to Drive and paste its ID into "
+                "`data_loader.py` (EXPOSURE_BY_ROUND_ID).")
+        return
+    rounds = [r for r in ROUND_LABELS if r in set(df["round"])]
+    c1, c2 = st.columns(2)
+    rnd = c1.selectbox("Survey round", rounds, format_func=ROUND_LABELS.get, key="exp_round")
+    weighting = c2.radio("Estimates", ["weighted", "unweighted"], horizontal=True,
+                         format_func=str.capitalize, key="exp_weighting")
+    sub = df[(df["round"] == rnd) & (df["weighting"] == weighting)]
+    st.markdown(_exposure_table(sub), unsafe_allow_html=True)
+    st.caption("Hover over an indicator for the number of respondents in each group. Difference = "
+               "Treatment minus Comparison, in percentage points.")
+
+    if rnd != "round1" and "change_pp" in sub.columns:
+        st.markdown(f"**Change since Round 1** ({ROUND_LABELS[rnd]} minus Round 1, same group)")
+        st.markdown(_round_change_table(sub, ROUND_LABELS[rnd]), unsafe_allow_html=True)
+    elif len(rounds) > 1:
+        st.caption("Pick a later round to see its change since Round 1.")
+
+    with st.expander("How these indicators are calculated"):
+        st.markdown(INDICATOR_QUESTIONS)
+    st.caption("Comparison includes people who don't listen to the radio, who were not asked about "
+               "radio programmes, so part of the recall gap reflects radio listening itself rather "
+               "than the campaign. Awareness: methods were read out, so this is prompted awareness.")
+
+
 def render() -> None:
     st.markdown("### Phone Pulse — Campaign Exposure: Treatment vs Comparison")
     st.caption(
-        "**Treatment** = listens to a FEM partner radio station (assigned to cover their "
-        "settlement) — i.e. they said they hear the campaign. This holds even if they "
-        "personally report not recalling FP-specific ad content. "
-        "**Comparison** = everyone else who passed QA — not assigned to/listening to a FEM "
-        "partner station, whether or not they listen to radio at all."
+        "**Treatment** = respondents who live within a FEM partner station's coverage area and "
+        "said they listened to that station in the past month — whether or not they recall "
+        "hearing FP content (that is measured separately, as campaign recall). "
+        "**Comparison** = everyone else who passed QA, whether or not they listen to radio at all."
     )
     st.markdown("---")
 
@@ -72,7 +184,7 @@ def render() -> None:
     n_comparison = int(n_row[n_row["group"] == COMPARISON_LABEL]["count"].iloc[0]) if not n_row.empty else 0
 
     c1, c2 = st.columns(2)
-    c1.metric("Treatment (heard campaign)", n_treatment)
+    c1.metric("Treatment (partner station listener)", n_treatment)
     c2.metric("Comparison (everyone else)", n_comparison)
 
     if 0 < n_comparison < 30:
@@ -96,18 +208,11 @@ def render() -> None:
     st.markdown("---")
 
     tab1, tab2, tab3, tab4 = st.tabs(
-        ["FP method awareness", "Current FP use", "Attitudes", "Social norms"]
+        ["Recall & awareness", "Current FP use", "Attitudes", "Social norms"]
     )
 
     with tab1:
-        df = load_pp_exposure_fp_awareness()
-        if df is None:
-            _pending("pp_exposure_fp_awareness")
-        elif df.empty:
-            st.info("No data available.")
-        else:
-            st.plotly_chart(_grouped_hbar(df, "Contraceptive method awareness"),
-                             use_container_width=True)
+        _render_recall_awareness()
 
     with tab2:
         df = load_pp_exposure_fp_use()

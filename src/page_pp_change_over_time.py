@@ -35,6 +35,8 @@ from src.data_loader import (
     load_barriers_change_unlinked,
     # Key indicators (both modes, one file)
     load_key_indicators_change,
+    # Airing timeline
+    load_airing_schedule, load_survey_windows,
 )
 from src import key_indicators as ki
 
@@ -57,6 +59,7 @@ SIG_THRESHOLD = 0.05
 # exists; every chart on this page picks it up automatically.
 ROUNDS = [
     {"round_id": "round1", "label": "Round 1 (~3 mo)",  "status": "live"},
+    {"round_id": "round2_early", "label": "Round 2 early (Haddin Kay, ~5 mo)", "status": "pending"},
     {"round_id": "round2", "label": "Round 2 (~6 mo)",  "status": "pending"},
     {"round_id": "round3", "label": "Round 3 (~24 mo)", "status": "pending"},
 ]
@@ -308,12 +311,10 @@ def _render_key_indicators(is_linked: bool) -> None:
             waves = [("Baseline", baseline_lookup(pop, prefix))] + [
                 (_round_x_label(r), round_lookup(pop, r, prefix)) for r in ROUNDS
             ] + [(f"Change vs baseline — {r['label']}", change_lookup(pop, r, prefix)) for r in live]
-            ki.show(ki.change_table(pop, waves))
-            if has_attitudes:
-                st.markdown(f"**{pop_label} — attitudes** (% holding the view, of those who "
-                            "answered) — estimate (95% CI)")
-                ki.show(ki.change_table(pop, waves, metrics=ATTITUDE_INDICATORS).rename(
-                    columns={"Indicator": "Attitude"}))
+            metrics = ki.HEADLINE_METRICS
+            if has_attitudes:   # attitude rows: % holding the view, of those who answered
+                metrics = {**metrics, **{m: f"Attitude: {label}" for m, label in ATTITUDE_INDICATORS.items()}}
+            ki.show(ki.change_table(pop, waves, metrics=metrics))
 
     weighting = st.selectbox(
         "Estimates", ["Weighted", "Unweighted"], key="ki_weighting",
@@ -814,6 +815,77 @@ def _render_barriers(is_linked: bool) -> None:
         )
 
 
+# ── Airing timeline ─────────────────────────────────────────────────────────
+
+def _render_airing_timeline(is_linked: bool) -> None:
+    """Campaign airing per station (bars) with each survey's fieldwork window
+    shaded behind, so every wave can be read against how long, and on which
+    stations, the campaign had been on air. Same in both comparison modes."""
+    st.subheader("Campaign airing and survey timing")
+    airing, windows = load_airing_schedule(), load_survey_windows()
+    if airing is None or windows is None:
+        missing = [name for name, df in (("airing_schedule.csv", airing),
+                                         ("survey_windows.csv", windows)) if df is None]
+        st.info(f"Timeline pending: {' and '.join(missing)} not on Drive yet: upload it "
+                "and paste the file ID in data_loader.py (AIRING_SCHEDULE_ID / SURVEY_WINDOWS_ID).")
+        return
+
+    # End dates are inclusive, so a block or window ends at the end of its last day.
+    airing = airing.assign(start=pd.to_datetime(airing["start_date"]),
+                           end=pd.to_datetime(airing["end_date"]) + pd.Timedelta(days=1))
+    windows = windows.assign(start=pd.to_datetime(windows["first_date"]),
+                             end=pd.to_datetime(windows["last_date"]) + pd.Timedelta(days=1))
+    days = (airing["end"] - airing["start"]).dt.days
+    order = airing.groupby("station")["start"].min().sort_values().index.tolist()  # first on air at top
+
+    fig = go.Figure()
+    for _, w in windows.iterrows():
+        fig.add_vrect(x0=w["start"], x1=w["end"], fillcolor=FEM_STEEL, opacity=0.16,
+                      line_width=0, layer="below")
+        fig.add_annotation(x=w["start"] + (w["end"] - w["start"]) / 2, y=1, yref="paper",
+                           yanchor="bottom", showarrow=False, font=dict(size=11, color=FEM_NAVY),
+                           text=str(w["label"]).replace("Phone Pulse ", ""))
+    fig.add_trace(go.Bar(
+        y=airing["station"], base=airing["start"], x=days * 86_400_000, orientation="h",
+        width=0.55, marker=dict(color=FEM_ORANGE, line=dict(width=0)),
+        customdata=list(zip(airing["start_date"], airing["end_date"], (days / 7).round(1))),
+        hovertemplate="<b>%{y}</b><br>On air from %{customdata[0]} (planned to %{customdata[1]})"
+                      "<extra></extra>",
+    ))
+    fig.update_layout(
+        **_CHART, height=120 + 34 * len(order), showlegend=False,
+        margin=dict(l=10, r=10, t=40, b=30),
+        # Airing is planned to 2028: show from the first survey / broadcast to a month past today.
+        xaxis=dict(type="date", tickformat="%b %Y", gridcolor="rgba(128,128,128,0.15)",
+                   range=[min(windows["start"].min(), airing["start"].min()) - pd.Timedelta(days=21),
+                          max(pd.Timestamp.today().normalize(), windows["end"].max()) + pd.Timedelta(days=30)]),
+        yaxis=dict(categoryorder="array", categoryarray=order[::-1], showgrid=False),
+    )
+    st.plotly_chart(fig, use_container_width=True)
+    st.caption("Orange bars: when each station aired the campaign. Grey bands: when each survey "
+               "was in the field (first to last submission). Hover a bar for its dates.")
+
+    left, right = st.columns(2)
+    with left:
+        st.markdown("**Survey fieldwork**")
+        st.dataframe(pd.DataFrame({
+            "Survey": windows["label"],
+            "First submission": windows["first_date"],
+            "Last submission": windows["last_date"],
+            "Days in field": (windows["end"] - windows["start"]).dt.days,
+        }), hide_index=True, use_container_width=True)
+    with right:
+        st.markdown("**Airing per station**")
+        to_date = (airing["end"].clip(upper=pd.Timestamp.today().normalize()) - airing["start"]).dt.days.clip(lower=0)
+        per = (airing.assign(days=to_date).groupby("station")
+               .agg(first=("start_date", "min"), last=("end_date", "max"), days=("days", "sum"))
+               .loc[order])
+        st.dataframe(pd.DataFrame({
+            "Station": per.index, "First aired": per["first"].values,
+            "Planned end": per["last"].values, "Weeks on air to date": (per["days"] / 7).round(1).values,
+        }), hide_index=True, use_container_width=True)
+
+
 # ── Limitations & shell ──────────────────────────────────────────────────────
 
 def _render_limitations(is_linked: bool) -> None:
@@ -851,16 +923,18 @@ def _render_limitations(is_linked: bool) -> None:
 
 def _render_comparison_type(is_linked: bool) -> None:
     tabs = st.tabs([
-        "Key Indicators", "Method Awareness", "Current FP Use", "Method Switching",
-        "Unmet Need", "Attitudes", "Barriers",
+        "Key Indicators", "Airing Timeline", "Method Awareness", "Current FP Use",
+        "Method Switching", "Unmet Need", "Attitudes", "Barriers",
     ])
     renderers = [
-        _render_key_indicators, _render_knowledge, _render_fp_use, _render_method_switching,
-        _render_unmet_need, _render_attitudes, _render_barriers,
+        _render_key_indicators, _render_airing_timeline, _render_knowledge, _render_fp_use,
+        _render_method_switching, _render_unmet_need, _render_attitudes, _render_barriers,
     ]
     for tab, renderer in zip(tabs, renderers):
         with tab:
             renderer(is_linked)
+            if renderer is _render_airing_timeline:
+                continue
             _render_limitations(is_linked)
 
 

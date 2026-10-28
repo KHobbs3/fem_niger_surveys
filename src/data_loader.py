@@ -299,7 +299,7 @@ def load_fp_use_change():            return _load_pp_or_none("1seUEGljG3vNDAIfNp
 #   cd 3_linkage && python link_respondents.py && python compare_unmet_need.py
 # then upload outputs/unmet_need_change_summary.csv to Drive and paste its
 # file ID in place of the placeholder below.
-def load_unmet_need_change():        return _load_pp_or_none("1kdJMRPY33t4JCLKb9Ct5HDaMtT3yrbW1")
+def load_unmet_need_change():        return _load_pp_or_none("1ETFhI3YlR2Yh0mS-P9WlP-NfvZIlPy2x")  # October 2026; previous "1kdJMRPY33t4JCLKb9Ct5HDaMtT3yrbW1"
 
 # Same deal for compare_method_switching.py's output. Generate it with:
 #   cd 3_linkage && python compare_method_switching.py
@@ -426,7 +426,7 @@ URBAN_RURAL = ["Rurale", "Semi-urbaine", "Urbaine"]
 
 # Parent-category groups of drivers/barriers (pipeline: --pages driver_barrier_groups).
 # Reads the local copy in data/ first; paste the Drive file ID here once uploaded.
-DRIVER_BARRIER_GROUPS_ID = ""
+DRIVER_BARRIER_GROUPS_ID = "1YRaDQETzQyyof_ydZEeiKwBwtkWKpu3w"
 
 
 def load_driver_barrier_groups():
@@ -435,3 +435,30 @@ def load_driver_barrier_groups():
     if os.path.exists(path):
         return pd.read_csv(path, index_col=0)
     return _load(DRIVER_BARRIER_GROUPS_ID, index_col=0) if DRIVER_BARRIER_GROUPS_ID else None
+
+
+# Airing timeline tab (Baseline vs. Follow-up page). Phone survey outputs, so not
+# kept in data/ (formative research only): paste each Drive file ID once uploaded.
+#   airing_schedule.csv  station, start_date, end_date (one row per airing block)
+#                        -- 2_phone pulse/etl_pipeline/export_airing_schedule.py
+#   survey_windows.csv   wave, label, first_date, last_date, n_submissions
+#                        -- 2_phone pulse/etl_pipeline/export_survey_windows.py (outputs/)
+AIRING_SCHEDULE_ID = "1r1WZlOG3otY5IkGl1R7kavX95rRVNQmr"
+SURVEY_WINDOWS_ID = "10gVsBj8fdnXeTIV42kQ2rjFCpaE7SrVy"
+
+
+def load_airing_schedule():
+    return _load_pp_or_none(AIRING_SCHEDULE_ID)
+
+
+def load_survey_windows():
+    return _load_pp_or_none(SURVEY_WINDOWS_ID)
+
+
+# Campaign Exposure page, "Recall & awareness" tab -- 3_linkage/outputs/exposure_by_round.csv
+# from 3_linkage/compare_exposure_rounds.py. Paste the Drive ID once uploaded.
+EXPOSURE_BY_ROUND_ID = "14kFSSmLckncl3nOulvbT9NO-M9r-h2E9"
+
+
+def load_exposure_by_round():
+    return _load_pp_or_none(EXPOSURE_BY_ROUND_ID)
