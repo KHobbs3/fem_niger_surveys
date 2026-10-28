@@ -345,9 +345,9 @@ def render_funnel(df_funnel, split_col):
             "method there, same \"confirm the self-report\" logic as the awareness "
             "stage above.\n\n"
             "\"Modern/effective method\" = sterilisation, implants, pills, IUD, "
-            "injectables, condoms, vaginal ring/patch, vaginal barrier methods, or "
-            "emergency contraception — excludes withdrawal, abstinence, the calendar "
-            "method, standard days method, and LAM."
+            "injectables, condoms, vaginal ring/patch, vaginal barrier methods, "
+            "standard days method, LAM, or emergency contraception — excludes "
+            "withdrawal, abstinence and the calendar method."
         )
 
 

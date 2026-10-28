@@ -65,7 +65,7 @@ INDICATOR_QUESTIONS = (
     "- **Campaign recall** — both of the above.\n"
     "- **Heard of a method** — `fpbeh_awarefp`: *\"I want you to think about methods you have heard "
     "of for delaying or avoiding pregnancies...\"*, each method read out. **At least one modern "
-    "method** uses the baseline's modern list (Standard Days and LAM not counted).\n\n"
+    "method** uses the baseline's modern list (Standard Days and LAM counted).\n\n"
     "**Groups**: Treatment = lives within a FEM partner station's coverage area and listened to "
     "that station in the past month (`radio_partner_N_listen`); Comparison = everyone else. "
     "**Weighted** = attrition weights (baseline weight ÷ chance of being reached in that round); "

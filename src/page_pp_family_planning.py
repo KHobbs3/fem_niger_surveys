@@ -129,8 +129,8 @@ def _render_key_indicators() -> None:
             "weighting note on the Change Over Time page).\n"
             "- **mCPR:** currently doing something to avoid pregnancy (`fpbeh_fpnow`) "
             "and using a modern method (`fpbeh_which`). Same method list as the "
-            "baseline, so Standard Days and LAM are *not* counted as modern here, "
-            "unlike the method charts below.\n"
+            "baseline and the method charts below (Standard Days and LAM count as "
+            "modern).\n"
             "- **Awareness:** named at least one modern method (`fpbeh_awarefp`). The "
             "enumerator read the methods aloud, so awareness is higher than at "
             "baseline, where only unprompted answers counted.\n"
@@ -207,12 +207,26 @@ def render() -> None:
         if df.empty:
             st.info("No data available.")
         else:
-            fig = _grouped_hbar(df, "Reasons for not using FP (% citing each reason)", order, colors)
+            # Older files have no `level`: every row was a reason category.
+            groups = df[df["level"] == "group"] if "level" in df.columns else df
+            fig = _grouped_hbar(groups, "Reasons for not using FP (% citing any reason in each group)",
+                                order, colors)
             st.plotly_chart(fig, use_container_width=True)
             st.caption(
                 "Base: all respondents in each group. "
-                "Respondents may cite multiple reasons."
+                "Respondents may cite multiple reasons. Groups follow the "
+                "questionnaire's own headings (e.g. all 22 \"Fear of side "
+                "effects\" reasons count once)."
             )
+            if "level" in df.columns:
+                reasons = df[(df["level"] == "reason") & (df["count"] > 0)]
+                with st.expander("Individual reasons"):
+                    pick = st.selectbox("Reason group", sorted(reasons["reason_group"].unique()),
+                                        key="pp_whynot_group")
+                    sub = reasons[reasons["reason_group"] == pick].copy()
+                    sub["category"] = sub["category"].str.split(": ", n=1).str[-1]
+                    st.plotly_chart(_grouped_hbar(sub, f"{pick}: % citing each reason", order, colors),
+                                    use_container_width=True)
 
     with tab4:
         df = _filter_split(load_pp_fp_preg_chance(), split_by)

@@ -312,10 +312,9 @@ def load_method_switching_crosstab(): return _load_pp_or_none("17cqQzQKlD5MTWYXP
 # Same deal for compare_attitudes.py's output (2026-09-10). Generate it with:
 #   cd 3_linkage && python compare_attitudes.py
 # then upload outputs/attitudes_change_summary.csv to Drive and paste its
-# file ID in place of the placeholder below. NOTE: only 4 of Phone Pulse's 8
+# file ID in place of the placeholder below. NOTE: 7 of Phone Pulse's 8
 # fpatt_* attitude items are covered — see 3_linkage/config.py
-# ATTITUDE_CROSSWALK for which, and why the other 4 have no usable baseline
-# equivalent.
+# ATTITUDE_CROSSWALK (fpatt_childinvest has no baseline equivalent).
 def load_attitudes_change():         return _load_pp_or_none("11BI2JRJFfDyBOJD-lTH-3mGvsqyyZ0L2")
 
 # Same deal for compare_barriers.py's output (2026-09-10). Generate it with:

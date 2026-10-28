@@ -232,12 +232,15 @@ def _population_caption(is_linked: bool, linked_text: str, cross_text: str) -> N
 # ── Key Indicators ────────────────────────────────────────────────────────────
 
 # Attitude items in key_indicators_change.csv (3_linkage/compare_key_indicators.py,
-# ATTITUDE_METRICS): % holding the view among those who answered the item.
+# ATTITUDE_METRICS): % agreeing with the statement among those who answered it.
 ATTITUDE_INDICATORS = {
-    "att_infertility_myth":    "Believes FP can cause infertility (myth)",
-    "att_against_religion":    "Believes FP goes against their religion/beliefs",
-    "att_confident_choosing":  "Feels confident/knowledgeable choosing a method",
-    "att_dismissive_planning": "Dismissive of FP importance/planning",
+    "att_stops_conceiving":   "Contraceptives can stop a woman from ever conceiving again",
+    "att_not_promiscuity":    "Contraceptive use does not encourage promiscuity",
+    "att_lacks_information":  "I don't think I have enough information to use contraceptives properly",
+    "att_birth_all_children": "A woman must give birth to all the children that are in her body",
+    "att_religious_leaders":  "Religious leaders I admire do not use or encourage contraception",
+    "att_spouse_approval":    "My spouse needs to approve in order for me to use contraception",
+    "att_many_children":      "Having many children is important because they bring benefits to the family",
 }
 
 
@@ -338,11 +341,11 @@ def _render_key_indicators(is_linked: bool) -> None:
     )
     if has_attitudes:
         st.caption(
-            "**Attitudes** use a best-effort match between the two surveys, which don't ask "
-            "the same statements: baseline = agreed with a formative statement shown to a "
-            "random subset of respondents (Agree / Disagree answers only); follow-up = scored "
-            "3 or 4 on the Phone Pulse 0–4 item. The wording and scale differ, so treat changes "
-            "as directional. Same weights, populations and bootstrap as the indicators above; "
+            "**Attitudes**: % agreeing with each statement, asked word for word in both "
+            "surveys: baseline = \"Agree\" (of Agree / Disagree answers); follow-up = scored "
+            "3 or 4 on the Phone Pulse 0–4 scale, which has a neutral middle. The scales "
+            "differ, so treat changes as directional. Same weights, populations and bootstrap "
+            "as the indicators above; "
             "the Attitudes tab shows the unweighted paired (McNemar) comparison for the "
             "linked respondents."
         )
@@ -726,13 +729,12 @@ def _render_attitudes(is_linked: bool) -> None:
         return
 
     st.warning(
-        "⚠️ **Best-effort thematic crosswalk, not a matched question**: "
-        "Phone Pulse asks 8 fixed attitude statements; the formative "
-        "baseline instead shows a 62-item randomized message-testing "
-        "statement bank. Only 4 of the 8 Phone Pulse items had a "
-        "plausible baseline equivalent at all — see "
-        "3_linkage/config.py `ATTITUDE_CROSSWALK` for the exact wording "
-        "matched and each pair's confidence."
+        "⚠️ **Same statements, different answer scales**: 7 of Phone "
+        "Pulse's 8 attitude statements repeat a baseline statement word "
+        "for word. Baseline answers were Agree / Disagree; Phone Pulse "
+        "used a 5-point scale with a neutral middle, counted here as "
+        "agreeing only for \"agree\" or \"strongly agree\". Read changes "
+        "as directional. % shown = agree with the statement as worded."
     )
     _population_caption(
         is_linked,
@@ -773,12 +775,10 @@ def _render_barriers(is_linked: bool) -> None:
         return
 
     st.warning(
-        "⚠️ **Keyword-based crosswalk, not a matched question**: the "
-        "formative baseline records open-taxonomy reasons for non-use; "
-        "Phone Pulse asks a fixed 12-category list. Each formative label "
-        "is mapped to the closest fixed category by keyword match — "
-        "approximate, not verified. See 3_linkage/config.py "
-        "`BARRIER_KEYWORDS`."
+        "⚠️ **Same reason list, different reference period**: both surveys "
+        "recorded unprompted reasons on the same 59-reason list, matched "
+        "reason by reason. Baseline asked people who hadn't used a method in "
+        "the last six months; Phone Pulse asked current non-users."
     )
     if is_linked:
         st.caption(
@@ -794,33 +794,44 @@ def _render_barriers(is_linked: bool) -> None:
         )
     st.markdown("---")
 
+    # Older files have no `level`: every row was a reason category.
+    groups = df[df["level"] == "group"] if "level" in df.columns else df
+    reasons = df[df["level"] == "reason"] if "level" in df.columns else df.iloc[0:0]
+
     fig = _multi_item_timeseries(
-        df, "category", "cited_baseline_pct", "cited_pulse_pct",
-        "Reasons for non-use over time", "% citing this reason",
+        groups, "category", "cited_baseline_pct", "cited_pulse_pct",
+        "Reasons for non-use over time (top 10 reason groups)", "% citing a reason in this group",
     )
     st.plotly_chart(fig, use_container_width=True)
     _pending_note()
 
-    r1 = df[df["round"] == "round1"]
     p_col = "mcnemar_p_value" if is_linked else "ztest_p_value"
-    show_cols = ["category", "cited_baseline_pct", "cited_pulse_pct", p_col, "direction"]
-    show_cols = [c for c in show_cols if c in r1.columns]
-    if not r1.empty:
-        st.markdown("#### Detail — Round 1")
-        _detail_table(
-            r1[show_cols].rename(columns={
-                "category": "Reason", "cited_baseline_pct": "Baseline %",
-                "cited_pulse_pct": "Round 1 %", p_col: "p-value", "direction": "Direction",
-            }).sort_values("Baseline %", ascending=False).reset_index(drop=True),
-        )
+    rename = {"category": "Reason", "reason_group": "Group", "cited_baseline_pct": "Baseline %",
+              "cited_pulse_pct": "Round 1 %", p_col: "p-value", "direction": "Direction"}
+
+    def _round1_table(d, cols):
+        r1 = d[d["round"] == "round1"]
+        cols = [c for c in cols if c in r1.columns]
+        return (r1[cols].rename(columns=rename)
+                .sort_values("Baseline %", ascending=False).reset_index(drop=True))
+
+    if not groups[groups["round"] == "round1"].empty:
+        st.markdown("#### Detail — Round 1, by reason group")
+        _detail_table(_round1_table(groups, ["category", "cited_baseline_pct", "cited_pulse_pct",
+                                             p_col, "direction"]))
+    if not reasons.empty:
+        with st.expander("Individual reasons (cited by anyone at either wave)"):
+            cited = reasons[(reasons["cited_baseline_pct"] > 0) | (reasons["cited_pulse_pct"] > 0)]
+            _detail_table(_round1_table(cited, ["reason_group", "category", "cited_baseline_pct",
+                                                "cited_pulse_pct", p_col, "direction"]))
 
 
 # ── Airing timeline ─────────────────────────────────────────────────────────
 
 def _render_airing_timeline(is_linked: bool) -> None:
-    """Campaign airing per station (bars) with each survey's fieldwork window
-    shaded behind, so every wave can be read against how long, and on which
-    stations, the campaign had been on air. Same in both comparison modes."""
+    """Campaign airing per station (pale bars) with each survey's fieldwork
+    window shaded over them, so every wave can be read against how long, and on
+    which stations, the campaign had been on air. Same in both comparison modes."""
     st.subheader("Campaign airing and survey timing")
     airing, windows = load_airing_schedule(), load_survey_windows()
     if airing is None or windows is None:
@@ -840,14 +851,15 @@ def _render_airing_timeline(is_linked: bool) -> None:
 
     fig = go.Figure()
     for _, w in windows.iterrows():
-        fig.add_vrect(x0=w["start"], x1=w["end"], fillcolor=FEM_STEEL, opacity=0.16,
-                      line_width=0, layer="below")
+        # Drawn above the bars so the windows stay visible across every station.
+        fig.add_vrect(x0=w["start"], x1=w["end"], fillcolor=FEM_NAVY, opacity=0.28,
+                      line=dict(color=FEM_NAVY, width=1), layer="above")
         fig.add_annotation(x=w["start"] + (w["end"] - w["start"]) / 2, y=1, yref="paper",
                            yanchor="bottom", showarrow=False, font=dict(size=11, color=FEM_NAVY),
                            text=str(w["label"]).replace("Phone Pulse ", ""))
     fig.add_trace(go.Bar(
         y=airing["station"], base=airing["start"], x=days * 86_400_000, orientation="h",
-        width=0.55, marker=dict(color=FEM_ORANGE, line=dict(width=0)),
+        width=0.45, marker=dict(color=FEM_ORANGE, opacity=0.35, line=dict(width=0)),
         customdata=list(zip(airing["start_date"], airing["end_date"], (days / 7).round(1))),
         hovertemplate="<b>%{y}</b><br>On air from %{customdata[0]} (planned to %{customdata[1]})"
                       "<extra></extra>",
@@ -862,8 +874,8 @@ def _render_airing_timeline(is_linked: bool) -> None:
         yaxis=dict(categoryorder="array", categoryarray=order[::-1], showgrid=False),
     )
     st.plotly_chart(fig, use_container_width=True)
-    st.caption("Orange bars: when each station aired the campaign. Grey bands: when each survey "
-               "was in the field (first to last submission). Hover a bar for its dates.")
+    st.caption("Pale orange bars: when each station aired the campaign. Dark blue bands: when each "
+               "survey was in the field (first to last submission). Hover a bar for its dates.")
 
     left, right = st.columns(2)
     with left:
