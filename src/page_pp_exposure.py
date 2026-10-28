@@ -137,6 +137,35 @@ def _round_change_table(sub: pd.DataFrame, round_label: str) -> str:
     return _html_table(head, rows)
 
 
+def _baseline_change_table(sub: pd.DataFrame, round_label: str) -> str:
+    """Baseline -> this round for the same people, per group, plus Treatment change minus
+    Comparison change. Recall rows: not asked at baseline."""
+    groups = ("Treatment", "Comparison", "All")
+    head = (["Indicator"] + [f"{g}<br>baseline → {round_label}<br>change (95% CI), p" for g in groups]
+            + ["Treatment change − Comparison change<br>(95% CI), p"])
+    rows = []
+    for section in sub["section"].drop_duplicates():
+        rows.append(f"<tr><td colspan='5' style='padding:10px 8px 2px;font-weight:600'>{section}</td></tr>")
+        for ind in sub.loc[sub["section"] == section, "indicator"].drop_duplicates():
+            g = sub[sub["indicator"] == ind].set_index("group")
+            label = g.iloc[0]["label"]
+            if pd.isna(g.loc["All"].get("baseline_pct")):
+                why = ("Not asked at baseline" if section == "Recall"
+                       else "Baseline combines male and female" if ind in ("aware_1", "aware_2", "aware_8", "aware_9")
+                       else "No baseline option")
+                rows.append(_row(label, why, [why, "", "", ""]))
+                continue
+            hover = "&#10;".join(f"{k}: baseline {int(g.loc[k, 'baseline_count'])}, now {int(g.loc[k, 'count'])} "
+                                 f"of N = {int(g.loc[k, 'n'])}" for k in groups)
+            cells = [f"{g.loc[k, 'baseline_pct']:.1f}% → {g.loc[k, 'pct']:.1f}%<br>"
+                     f"{_fmt_pp(g.loc[k, 'change_vs_baseline_pp'], g.loc[k, 'change_vs_baseline_ci_low_pp'], g.loc[k, 'change_vs_baseline_ci_high_pp'])}"
+                     f", p = {_fmt_p(g.loc[k, 'change_vs_baseline_p_value'])}" for k in groups]
+            t = g.loc["Treatment"]
+            cells.append(f"{_fmt_pp(t['did_pp'], t['did_ci_low_pp'], t['did_ci_high_pp'])}, p = {_fmt_p(t['did_p_value'])}")
+            rows.append(_row(label, hover, cells, bold=ind == "aware_modern"))
+    return _html_table(head, rows)
+
+
 def _render_recall_awareness() -> None:
     df = load_exposure_by_round()
     if df is None:
@@ -153,6 +182,19 @@ def _render_recall_awareness() -> None:
     st.markdown(_exposure_table(sub), unsafe_allow_html=True)
     st.caption("Hover over an indicator for the number of respondents in each group. Difference = "
                "Treatment minus Comparison, in percentage points.")
+
+    if "baseline_pct" in sub.columns:
+        st.markdown(f"**Change since baseline** (the same people at baseline and {ROUND_LABELS[rnd]}, "
+                    "in the group their phone answers put them in)")
+        st.markdown(_baseline_change_table(sub, ROUND_LABELS[rnd]), unsafe_allow_html=True)
+        st.caption(
+            "Recall can't be compared: the baseline asked no question about hearing FP programmes or "
+            "the recommended wait after a birth, and the campaign had not started. Awareness: the "
+            "baseline asked people to list methods unprompted, and only asked those who said they knew "
+            "an effective method (everyone else counts as not aware), so part of any rise reflects the "
+            "question, not the campaign. The question change should affect both groups similarly, so the "
+            "last column (Treatment change minus Comparison change) is the better guide to a campaign "
+            "effect, though the groups were not randomised.")
 
     if rnd != "round1" and "change_pp" in sub.columns:
         st.markdown(f"**Change since Round 1** ({ROUND_LABELS[rnd]} minus Round 1, same group)")
