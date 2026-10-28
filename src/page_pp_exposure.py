@@ -139,7 +139,8 @@ def _round_change_table(sub: pd.DataFrame, round_label: str) -> str:
 
 def _baseline_change_table(sub: pd.DataFrame, round_label: str) -> str:
     """Baseline -> this round for the same people, per group, plus Treatment change minus
-    Comparison change. Recall rows: not asked at baseline."""
+    Comparison change. Recall rows: not asked at baseline. Shown on Change Over Time >
+    Key Indicators (page_pp_change_over_time.py)."""
     groups = ("Treatment", "Comparison", "All")
     head = (["Indicator"] + [f"{g}<br>baseline → {round_label}<br>change (95% CI), p" for g in groups]
             + ["Treatment change − Comparison change<br>(95% CI), p"])
@@ -190,19 +191,6 @@ def _render_recall_awareness() -> None:
     st.markdown(_exposure_table(sub), unsafe_allow_html=True)
     st.caption("Hover over an indicator for the number of respondents in each group. Difference = "
                "Treatment minus Comparison, in percentage points.")
-
-    if "baseline_pct" in sub.columns:
-        st.markdown(f"**Change since baseline** (the same people at baseline and {ROUND_LABELS[rnd]}, "
-                    "in the group their phone answers put them in)")
-        st.markdown(_baseline_change_table(sub, ROUND_LABELS[rnd]), unsafe_allow_html=True)
-        st.caption(
-            "Recall can't be compared: the baseline asked no question about hearing FP programmes or "
-            "the recommended wait after a birth, and the campaign had not started. Awareness: the "
-            "baseline asked people to list methods unprompted, and only asked those who said they knew "
-            "an effective method (everyone else counts as not aware), so part of any rise reflects the "
-            "question, not the campaign. The question change should affect both groups similarly, so the "
-            "last column (Treatment change minus Comparison change) is the better guide to a campaign "
-            "effect, though the groups were not randomised.")
 
     if rnd != "round1" and "change_pp" in sub.columns:
         st.markdown(f"**Change since Round 1** ({ROUND_LABELS[rnd]} minus Round 1, same group)")
