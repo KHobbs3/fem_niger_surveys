@@ -104,17 +104,20 @@ def _row(label: str, hover: str, cells: list[str], bold: bool = False) -> str:
 def _exposure_table(sub: pd.DataFrame) -> str:
     """Treatment vs Comparison, one row per indicator; hover the indicator for each group's N."""
     head = ["Indicator", "Treatment (partner station listener)<br>% (95% CI)",
-            "Comparison (everyone else)<br>% (95% CI)", "Difference<br>(95% CI)", "p-value"]
+            "Comparison (everyone else)<br>% (95% CI)", "Full sample<br>% (95% CI)",
+            "Difference<br>Treatment − Comparison (95% CI)", "p-value"]
     rows = []
     for section in sub["section"].drop_duplicates():
-        rows.append(f"<tr><td colspan='5' style='padding:10px 8px 2px;font-weight:600'>{section}</td></tr>")
+        rows.append(f"<tr><td colspan='6' style='padding:10px 8px 2px;font-weight:600'>{section}</td></tr>")
         for ind in sub.loc[sub["section"] == section, "indicator"].drop_duplicates():
             g = sub[sub["indicator"] == ind].set_index("group")
-            t, c = g.loc["Treatment"], g.loc["Comparison"]
+            t, c, a = g.loc["Treatment"], g.loc["Comparison"], g.loc["All"]
             hover = (f"Treatment: {int(t['count'])} of N = {int(t['n'])}&#10;"
-                     f"Comparison: {int(c['count'])} of N = {int(c['n'])}")
+                     f"Comparison: {int(c['count'])} of N = {int(c['n'])}&#10;"
+                     f"Full sample: {int(a['count'])} of N = {int(a['n'])}")
             rows.append(_row(t["label"], hover, [
                 _fmt_pct(t["pct"], t["ci_low"], t["ci_high"]), _fmt_pct(c["pct"], c["ci_low"], c["ci_high"]),
+                _fmt_pct(a["pct"], a["ci_low"], a["ci_high"]),
                 _fmt_pp(t["diff_vs_comparison_pp"], t["diff_ci_low_pp"], t["diff_ci_high_pp"]),
                 _fmt_p(t["diff_p_value"])], bold=ind in ("campaign_recall", "aware_modern")))
     return _html_table(head, rows)
